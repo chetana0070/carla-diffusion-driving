@@ -1,0 +1,55 @@
+{
+  "project": {
+    "name": "carla-diffusion-driving",
+    "schema_version": "1.0.0",
+    "random_seed": 20260803
+  },
+  "simulator": {
+    "carla_version": "0.9.16",
+    "host": "127.0.0.1",
+    "rpc_port": 2000,
+    "streaming_port": 2001,
+    "synchronous_mode": true,
+    "fixed_delta_seconds": 0.1,
+    "control_hz": 10,
+    "quality_level": "Low",
+    "traffic_manager_seed": 20260803
+  },
+  "camera": {
+    "name": "rgb_front",
+    "capture_width": 640,
+    "capture_height": 360,
+    "model_width": 224,
+    "model_height": 224,
+    "fov_degrees": 90,
+    "history_frames": 4,
+    "jpeg_quality": 85
+  },
+  "policy": {
+    "action_horizon": 16,
+    "execute_steps": 4,
+    "action_dimension": 2,
+    "diffusion_inference_steps": 10,
+    "visual_encoder": "efficientnet_b0",
+    "freeze_encoder_initially": true
+  },
+  "dataset": {
+    "shard_format": "tar",
+    "max_shard_gib": 2,
+    "minimum_free_disk_gib": 100,
+    "stop_collection_free_disk_gib": 80,
+    "route_level_split": true,
+    "train_towns": ["Town01", "Town03", "Town04"],
+    "validation_towns": ["Town02"],
+    "test_towns": ["Town05", "Town10HD"]
+  },
+  "evaluation": {
+    "seeds": [17, 29, 43],
+    "target_route_completion_gain_percentage_points": 10,
+    "target_driving_score_relative_gain": 0.15,
+    "target_collision_reduction": 0.25,
+    "target_intervention_reduction": 0.30,
+    "max_policy_latency_ms": 100
+  }
+}
+

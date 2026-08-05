@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carla-diffusion-driving"
+version = "0.2.0"
+description = "Temporal diffusion driving policy research pipeline for CARLA"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "ruff>=0.9,<1",
+  "mypy>=1.14,<2",
+]
+training = [
+  "numpy>=1.26,<3",
+  "torch>=2.8",
+  "torchvision>=0.23",
+  "opencv-python>=4.10",
+  "pillow>=11",
+  "h5py>=3.12",
+  "tqdm>=4.67",
+  "tensorboard>=2.18",
+  "gymnasium>=1.0",
+  "stable-baselines3>=2.7",
+]
+simulator = [
+  "carla==0.9.16",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/carla-diffusion-driving/driving_schema_v1.json",
+  "title": "CARLA Driving Sample Schema v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "route_id",
+    "frame_id",
+    "timestamp_seconds",
+    "observation",
+    "expert_action",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "route_id": {"type": "string", "minLength": 1},
+    "frame_id": {"type": "integer", "minimum": 0},
+    "timestamp_seconds": {"type": "number", "minimum": 0},
+    "observation": {
+      "type": "object",
+      "required": ["rgb_front_path", "state", "traffic_light_state", "route_command"],
+      "properties": {
+        "rgb_front_path": {"type": "string", "minLength": 1},
+        "state": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {"type": "number"}
+        },
+        "traffic_light_state": {
+          "enum": ["none", "red", "yellow", "green", "unknown"]
+        },
+        "route_command": {
+          "enum": ["follow_lane", "left", "right", "straight"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "expert_action": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "number", "minimum": -1, "maximum": 1}
+    },
+    "events": {
+      "type": "object",
+      "required": ["collision", "lane_invasion", "red_light_violation", "intervention"],
+      "properties": {
+        "collision": {"type": "boolean"},
+        "lane_invasion": {"type": "boolean"},
+        "red_light_violation": {"type": "boolean"},
+        "intervention": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environments and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+
+# CARLA package and generated data
+CARLA_*/
+carla-server/
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Training/evaluation artifacts
+artifacts/checkpoints/*
+artifacts/evaluations/*
+!artifacts/checkpoints/.gitkeep
+!artifacts/evaluations/.gitkeep
+artifacts/*.json
+runs/
+wandb/
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.zarr/
+*.mp4

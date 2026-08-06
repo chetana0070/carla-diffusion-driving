@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=360)
     parser.add_argument("--fixed-delta", type=float, default=0.1)
     parser.add_argument("--sensor-timeout", type=float, default=30.0)
+    parser.add_argument("--spectator-follow", action="store_true")
     parser.add_argument(
         "--report",
         type=Path,
@@ -68,13 +69,25 @@ def spawn_vehicle(world: carla.World, blueprint: carla.ActorBlueprint) -> carla.
     raise RuntimeError("unable to spawn the ego vehicle")
 
 
+def update_spectator(world: carla.World, vehicle: carla.Vehicle) -> None:
+    transform = vehicle.get_transform()
+    forward = transform.get_forward_vector()
+    location = carla.Location(
+        x=transform.location.x - 8.0 * forward.x,
+        y=transform.location.y - 8.0 * forward.y,
+        z=transform.location.z + 5.0,
+    )
+    rotation = carla.Rotation(pitch=-18.0, yaw=transform.rotation.yaw)
+    world.get_spectator().set_transform(carla.Transform(location, rotation))
+
+
 def main() -> int:
     args = parse_args()
     if args.ticks < 1:
         raise ValueError("--ticks must be positive")
 
     client = carla.Client(args.host, args.port)
-    client.set_timeout(20.0)
+    client.set_timeout(120.0)
     # Keep the infrastructure smoke test lightweight and deterministic. Larger
     # maps such as Town10HD belong in the frozen evaluation suite.
     world = client.load_world(args.map)
@@ -121,6 +134,8 @@ def main() -> int:
 
         for _ in range(args.ticks):
             expected_frame = world.tick()
+            if args.spectator_follow:
+                update_spectator(world, vehicle)
             wait_start = time.perf_counter()
             try:
                 image = images.get(timeout=args.sensor_timeout)

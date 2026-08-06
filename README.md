@@ -15,9 +15,10 @@ Phase 0 freezes the experimental contract before simulator installation:
 - experiment matrix and acceptance gates;
 - storage controls for a 240 GB Ubuntu partition.
 
-Phase 0 has passed on the target laptop. Phase 1 adds a pinned packaged-server
-installer and a deterministic 1,000-tick RGB sensor synchronization test. No
-model is trained in either phase.
+Phase 0 passed on the target laptop. Phase 1 installed the pinned packaged
+server and passed a deterministic 1,000-tick RGB synchronization test. Phase 2
+adds atomic expert-episode collection, storage gates, and full dataset
+validation. No model is trained in these infrastructure phases.
 
 ## Research question
 
@@ -90,3 +91,18 @@ conda activate carla310
 
 CARLA 0.9.16/UE4.26 is pinned intentionally. CARLA 0.10.0/UE5.5 has a larger
 recommended hardware envelope than the target 8 GB laptop GPU.
+
+## Phase 2 pilot
+
+```bash
+conda activate carla310
+./scripts/run_phase2_pilot.sh
+```
+
+The pilot records ten seeded Town01 Traffic Manager episodes (6,000 synchronized
+samples), validates the frozen schema and every image reference, and refuses to
+start below 100 GiB free. See `docs/phase2_data_pilot.md` for the exit gate.
+
+For visual debugging, prefix either runner with `CARLA_RENDER_MODE=live`. This
+opens a Low-quality chase-camera window; automated and benchmark execution stays
+off-screen by default.

@@ -3,7 +3,12 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CARLA_ROOT="${CARLA_ROOT:-/home/chetana/opt/carla-0.9.16}"
-SERVER_LOG="$PROJECT_ROOT/artifacts/evaluations/carla_server_phase1.log"
+SERVER_LOG="$PROJECT_ROOT/artifacts/evaluations/carla_server_phase2.log"
+EPISODES="${PHASE2_EPISODES:-10}"
+TICKS_PER_EPISODE="${PHASE2_TICKS_PER_EPISODE:-600}"
+BACKGROUND_VEHICLES="${PHASE2_BACKGROUND_VEHICLES:-8}"
+DATASET_ROOT="${PHASE2_DATASET_ROOT:-data/raw/phase2_pilot}"
+REPORT_PATH="${PHASE2_REPORT_PATH:-artifacts/evaluations/phase2_pilot_report.json}"
 RENDER_MODE="${CARLA_RENDER_MODE:-offscreen}"
 SERVER_PID=""
 
@@ -16,18 +21,15 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [[ "${CONDA_DEFAULT_ENV:-}" != "carla310" ]]; then
-    echo "FAIL: activate carla310 before running the smoke test."
+    echo "FAIL: activate carla310 before running the pilot."
     exit 1
 fi
-
 if [[ ! -x "$CARLA_ROOT/CarlaUE4.sh" ]]; then
     echo "FAIL: CarlaUE4.sh not found at $CARLA_ROOT"
-    echo "Run ./scripts/install_carla_0916.sh first."
     exit 1
 fi
 
 mkdir -p "$(dirname "$SERVER_LOG")"
-
 SERVER_ARGS=(-quality-level=Low -carla-rpc-port=2000)
 CLIENT_ARGS=()
 if [[ "$RENDER_MODE" == "live" ]]; then
@@ -72,13 +74,18 @@ else:
 PY
 
 cd "$PROJECT_ROOT"
-python scripts/phase1_sensor_smoke.py \
+python scripts/collect_phase2_pilot.py \
     --map Town01 \
-    --ticks 1000 \
+    --episodes "$EPISODES" \
+    --ticks-per-episode "$TICKS_PER_EPISODE" \
+    --background-vehicles "$BACKGROUND_VEHICLES" \
     --seed 20260803 \
-    --width 640 \
-    --height 360 \
-    --fixed-delta 0.1 \
+    --dataset-root "$DATASET_ROOT" \
+    --report "$REPORT_PATH" \
     "${CLIENT_ARGS[@]}"
 
-echo "Phase 1 sensor smoke test passed."
+python scripts/validate_dataset.py \
+    "$DATASET_ROOT" \
+    --report artifacts/evaluations/phase2_dataset_validation.json
+
+echo "Phase 2 pilot collection and validation passed."

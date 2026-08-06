@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import PurePosixPath
 from typing import Any, Mapping, Sequence
 
@@ -40,7 +41,10 @@ def _number_sequence(value: Any, length: int, name: str) -> tuple[float, ...]:
         raise SampleValidationError(f"{name} must contain {length} values")
     if any(isinstance(item, bool) or not isinstance(item, (int, float)) for item in value):
         raise SampleValidationError(f"{name} must contain only numbers")
-    return tuple(float(item) for item in value)
+    numbers = tuple(float(item) for item in value)
+    if not all(math.isfinite(item) for item in numbers):
+        raise SampleValidationError(f"{name} must contain only finite numbers")
+    return numbers
 
 
 def validate_sample(record: Mapping[str, Any]) -> DrivingSample:
@@ -57,24 +61,43 @@ def validate_sample(record: Mapping[str, Any]) -> DrivingSample:
     missing = required - record.keys()
     if missing:
         raise SampleValidationError(f"missing fields: {sorted(missing)}")
+    extra = record.keys() - required
+    if extra:
+        raise SampleValidationError(f"unexpected fields: {sorted(extra)}")
     if record["schema_version"] != "1.0.0":
         raise SampleValidationError("unsupported schema_version")
-    if not record["episode_id"] or not record["route_id"]:
-        raise SampleValidationError("episode_id and route_id must be non-empty")
-    if not isinstance(record["frame_id"], int) or record["frame_id"] < 0:
+    if not isinstance(record["episode_id"], str) or not record["episode_id"]:
+        raise SampleValidationError("episode_id must be a non-empty string")
+    if not isinstance(record["route_id"], str) or not record["route_id"]:
+        raise SampleValidationError("route_id must be a non-empty string")
+    if (
+        isinstance(record["frame_id"], bool)
+        or not isinstance(record["frame_id"], int)
+        or record["frame_id"] < 0
+    ):
         raise SampleValidationError("frame_id must be a non-negative integer")
-    if not isinstance(record["timestamp_seconds"], (int, float)) or record["timestamp_seconds"] < 0:
+    if (
+        isinstance(record["timestamp_seconds"], bool)
+        or not isinstance(record["timestamp_seconds"], (int, float))
+        or record["timestamp_seconds"] < 0
+    ):
         raise SampleValidationError("timestamp_seconds must be non-negative")
+    if not math.isfinite(float(record["timestamp_seconds"])):
+        raise SampleValidationError("timestamp_seconds must be finite")
 
     observation = record["observation"]
     if not isinstance(observation, Mapping):
         raise SampleValidationError("observation must be an object")
+    observation_fields = {"rgb_front_path", "state", "traffic_light_state", "route_command"}
+    if set(observation) != observation_fields:
+        raise SampleValidationError("observation fields do not match the schema")
     state = _number_sequence(observation.get("state"), 8, "observation.state")
     image_path = observation.get("rgb_front_path")
     if not isinstance(image_path, str) or not image_path:
         raise SampleValidationError("rgb_front_path must be non-empty")
-    if PurePosixPath(image_path).is_absolute():
-        raise SampleValidationError("rgb_front_path must be dataset-relative")
+    normalized_image_path = PurePosixPath(image_path)
+    if normalized_image_path.is_absolute() or ".." in normalized_image_path.parts:
+        raise SampleValidationError("rgb_front_path must be a safe dataset-relative path")
     light = observation.get("traffic_light_state")
     command = observation.get("route_command")
     if light not in TRAFFIC_LIGHT_STATES:
@@ -88,7 +111,10 @@ def validate_sample(record: Mapping[str, Any]) -> DrivingSample:
 
     events = record["events"]
     event_names = ("collision", "lane_invasion", "red_light_violation", "intervention")
-    if not isinstance(events, Mapping) or any(not isinstance(events.get(name), bool) for name in event_names):
+    valid_events = isinstance(events, Mapping) and set(events) == set(event_names) and all(
+        isinstance(events.get(name), bool) for name in event_names
+    )
+    if not valid_events:
         raise SampleValidationError("all event fields must be boolean")
 
     return DrivingSample(
@@ -107,4 +133,3 @@ def validate_sample(record: Mapping[str, Any]) -> DrivingSample:
         red_light_violation=events["red_light_violation"],
         intervention=events["intervention"],
     )
-

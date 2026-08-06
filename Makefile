@@ -1,4 +1,4 @@
-.PHONY: test validate phase0
+.PHONY: test validate phase0 phase1 phase2-validate
 
 test:
 	python -m unittest discover -s tests -v
@@ -9,3 +9,8 @@ validate:
 
 phase0: test validate
 
+phase1:
+	./scripts/run_phase1_smoke.sh
+
+phase2-validate:
+	python scripts/validate_dataset.py data/raw/phase2_pilot

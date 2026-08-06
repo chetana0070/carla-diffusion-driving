@@ -30,6 +30,15 @@ cd /home/chetana/carla-diffusion-driving
 ./scripts/run_phase1_smoke.sh
 ```
 
+To observe the test in a 1280 x 720 chase-camera window:
+
+```bash
+CARLA_RENDER_MODE=live ./scripts/run_phase1_smoke.sh
+```
+
+Live mode requires an active Ubuntu graphical session. The default remains
+`offscreen` for repeatable automated execution.
+
 The runner starts the server at Low quality with off-screen rendering, waits for
 port 2000, loads lightweight `Town01`, captures the RGB camera on every world
 tick, performs 1,000 synchronous ticks at 10 Hz simulation time, and stops the

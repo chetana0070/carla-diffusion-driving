@@ -43,13 +43,24 @@ class SchemaTests(unittest.TestCase):
         with self.assertRaises(SampleValidationError):
             validate_sample(record)
 
+    def test_parent_image_path_is_rejected(self) -> None:
+        record = valid_record()
+        record["observation"]["rgb_front_path"] = "../outside.jpg"
+        with self.assertRaises(SampleValidationError):
+            validate_sample(record)
+
     def test_out_of_range_action_is_rejected(self) -> None:
         record = valid_record()
         record["expert_action"] = [1.4, 0.0]
         with self.assertRaises(SampleValidationError):
             validate_sample(record)
 
+    def test_non_finite_state_is_rejected(self) -> None:
+        record = valid_record()
+        record["observation"]["state"][0] = float("nan")
+        with self.assertRaises(SampleValidationError):
+            validate_sample(record)
+
 
 if __name__ == "__main__":
     unittest.main()
-

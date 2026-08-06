@@ -55,6 +55,7 @@ PY
 
 cd "$PROJECT_ROOT"
 python scripts/phase1_sensor_smoke.py \
+    --map Town01 \
     --ticks 1000 \
     --seed 20260803 \
     --width 640 \
@@ -62,4 +63,3 @@ python scripts/phase1_sensor_smoke.py \
     --fixed-delta 0.1
 
 echo "Phase 1 sensor smoke test passed."
-

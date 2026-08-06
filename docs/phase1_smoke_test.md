@@ -16,10 +16,11 @@ chmod +x scripts/install_carla_0916.sh scripts/run_phase1_smoke.sh
 ./scripts/install_carla_0916.sh
 ```
 
-The installer resolves the official GitHub release asset, resumes interrupted
-downloads, verifies the release digest when GitHub exposes one, extracts the
-packaged simulator to `/home/chetana/opt/carla-0.9.16`, deletes the downloaded
-archive, and installs the matching Python API.
+The installer resolves the official Linux package link from CARLA's GitHub
+release notes, resumes interrupted downloads, verifies a digest when one is
+published, extracts the packaged simulator to
+`/home/chetana/opt/carla-0.9.16`, deletes the downloaded archive, and installs
+the matching Python API.
 
 ## Smoke test
 
@@ -30,8 +31,9 @@ cd /home/chetana/carla-diffusion-driving
 ```
 
 The runner starts the server at Low quality with off-screen rendering, waits for
-port 2000, performs 1,000 synchronous ticks at 10 Hz simulation time, and stops
-the server automatically.
+port 2000, loads lightweight `Town01`, captures the RGB camera on every world
+tick, performs 1,000 synchronous ticks at 10 Hz simulation time, and stops the
+server automatically. `Town10HD` remains reserved for held-out evaluation.
 
 ## Passing contract
 
@@ -51,4 +53,3 @@ Outputs:
 If the server fails to launch on Ubuntu 24.04/kernel 7.x, preserve the server
 log and route to the Ubuntu 22.04 container contingency. Do not compile CARLA
 from source.
-

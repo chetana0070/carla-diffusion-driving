@@ -7,6 +7,7 @@ INSTALL_ROOT="${CARLA_INSTALL_ROOT:-/home/chetana/opt/carla-${CARLA_VERSION}}"
 CACHE_ROOT="${XDG_CACHE_HOME:-/home/chetana/.cache}/carla-downloads"
 ARCHIVE_PATH="$CACHE_ROOT/$ASSET_NAME"
 REPOSITORY="carla-simulator/carla"
+OFFICIAL_LINUX_URL="https://tiny.carla.org/carla-0-9-16-linux"
 
 if [[ "$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" != "3.10" ]]; then
     echo "FAIL: activate the carla310 environment before installation."
@@ -18,6 +19,9 @@ if [[ -x "$INSTALL_ROOT/CarlaUE4.sh" ]]; then
 else
     mkdir -p "$CACHE_ROOT" "$INSTALL_ROOT"
 
+    ASSET_URL=""
+    ASSET_DIGEST=""
+
     if command -v gh >/dev/null 2>&1; then
         ASSET_URL="$(
             gh api "repos/$REPOSITORY/releases/tags/$CARLA_VERSION" \
@@ -27,14 +31,13 @@ else
             gh api "repos/$REPOSITORY/releases/tags/$CARLA_VERSION" \
                 --jq ".assets[] | select(.name == \"$ASSET_NAME\") | (.digest // \"\")"
         )"
-    else
-        ASSET_URL="https://github.com/$REPOSITORY/releases/download/$CARLA_VERSION/$ASSET_NAME"
-        ASSET_DIGEST=""
     fi
 
     if [[ -z "$ASSET_URL" ]]; then
-        echo "FAIL: could not resolve the official $ASSET_NAME release asset."
-        exit 1
+        # CARLA 0.9.16 exposes Linux packages as links in its GitHub release
+        # notes, not as GitHub release assets. Use CARLA's official short URL.
+        ASSET_URL="$OFFICIAL_LINUX_URL"
+        echo "Using the official CARLA 0.9.16 Linux package link"
     fi
 
     echo "Downloading official CARLA $CARLA_VERSION packaged server"
@@ -49,7 +52,7 @@ else
         fi
         echo "CARLA archive SHA-256 verified"
     else
-        echo "WARNING: GitHub did not publish a SHA-256 digest for this legacy asset."
+        echo "WARNING: CARLA did not publish a SHA-256 digest for this package."
     fi
 
     echo "Extracting CARLA to $INSTALL_ROOT"
@@ -71,4 +74,3 @@ printf '\nAdd this to future shells when needed:\n'
 printf 'export CARLA_ROOT=%q\n' "$INSTALL_ROOT"
 printf '\nInstallation complete. Remaining disk space:\n'
 df -h /home/chetana
-

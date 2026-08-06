@@ -25,11 +25,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=2000)
     parser.add_argument("--traffic-manager-port", type=int, default=8000)
+    parser.add_argument("--map", default="Town01")
     parser.add_argument("--ticks", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260803)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=360)
     parser.add_argument("--fixed-delta", type=float, default=0.1)
+    parser.add_argument("--sensor-timeout", type=float, default=30.0)
     parser.add_argument(
         "--report",
         type=Path,
@@ -73,7 +75,9 @@ def main() -> int:
 
     client = carla.Client(args.host, args.port)
     client.set_timeout(20.0)
-    world = client.get_world()
+    # Keep the infrastructure smoke test lightweight and deterministic. Larger
+    # maps such as Town10HD belong in the frozen evaluation suite.
+    world = client.load_world(args.map)
     original_settings = world.get_settings()
     traffic_manager = client.get_trafficmanager(args.traffic_manager_port)
     actors: list[carla.Actor] = []
@@ -102,7 +106,10 @@ def main() -> int:
         camera_bp.set_attribute("image_size_x", str(args.width))
         camera_bp.set_attribute("image_size_y", str(args.height))
         camera_bp.set_attribute("fov", "90")
-        camera_bp.set_attribute("sensor_tick", str(args.fixed_delta))
+        # Zero means capture on every simulator tick. Matching sensor_tick to
+        # fixed_delta can miss frames because the two clocks accumulate
+        # floating-point time independently inside Unreal Engine.
+        camera_bp.set_attribute("sensor_tick", "0.0")
         camera = world.spawn_actor(
             camera_bp,
             carla.Transform(carla.Location(x=1.5, z=2.2)),
@@ -115,7 +122,14 @@ def main() -> int:
         for _ in range(args.ticks):
             expected_frame = world.tick()
             wait_start = time.perf_counter()
-            image = images.get(timeout=10.0)
+            try:
+                image = images.get(timeout=args.sensor_timeout)
+            except queue.Empty as error:
+                raise RuntimeError(
+                    "camera produced no image for "
+                    f"world frame {expected_frame} within "
+                    f"{args.sensor_timeout:.1f} seconds"
+                ) from error
             sensor_wait_ms.append((time.perf_counter() - wait_start) * 1000)
             frame_ids.append(image.frame)
             dimensions[(image.width, image.height)] += 1
@@ -153,6 +167,8 @@ def main() -> int:
         "carla_server_version": client.get_server_version(),
         "carla_client_version": client.get_client_version(),
         "map": world.get_map().name,
+        "sensor_tick_seconds": 0.0,
+        "sensor_timeout_seconds": args.sensor_timeout,
         "seed": args.seed,
         "requested_ticks": args.ticks,
         "received_frames": len(frame_ids),
@@ -174,4 +190,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

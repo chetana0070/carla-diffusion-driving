@@ -55,6 +55,23 @@
     "pilot_validation_routes": 1,
     "pilot_test_routes": 1
   },
+  "behavioral_cloning": {
+    "image_encoder": "efficientnet_b0",
+    "image_feature_dimension": 1280,
+    "scalar_input_dimension": 19,
+    "scalar_feature_dimension": 128,
+    "fusion_hidden_dimensions": [256, 128],
+    "output_dimension": 2,
+    "image_size": 224,
+    "batch_size": 32,
+    "epochs": 15,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "freeze_encoder_epochs": 2,
+    "early_stopping_patience": 5,
+    "steering_tolerance": 0.05,
+    "longitudinal_tolerance": 0.1
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,

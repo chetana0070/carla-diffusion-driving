@@ -133,3 +133,27 @@ route split, training-only normalization statistics, explicit lead/light
 availability masks, acceleration clipping metadata, and sampling weights for
 rare maneuvers and redundant stationary brake holds. Raw Phase 2 files are
 never modified.
+
+## Phase 4 single-frame BC baseline
+
+PyTorch 2.11.0 and torchvision 0.26.0 are pinned for the target RTX 5060 CUDA
+12.8 environment. Verify the architecture and gradients first, then run a
+two-batch data/training smoke test:
+
+```bash
+python scripts/smoke_phase4_model.py
+python scripts/train_single_frame_bc.py \
+    --smoke \
+    --output-dir artifacts/checkpoints/phase4_single_frame_smoke
+```
+
+If both pass, train the ImageNet-initialized single-frame baseline:
+
+```bash
+python scripts/train_single_frame_bc.py --pretrained
+```
+
+This baseline uses only the current frame and predicts the first expert action.
+It establishes the controlled comparison for temporal BC and temporal action
+diffusion. See `docs/phase4_single_frame_bc.md` for the metric and checkpoint
+selection contract.

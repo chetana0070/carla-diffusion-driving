@@ -28,6 +28,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "policy",
         "dataset",
         "preprocessing",
+        "behavioral_cloning",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -38,6 +39,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     policy = config["policy"]
     dataset = config["dataset"]
     preprocessing = config["preprocessing"]
+    behavioral_cloning = config["behavioral_cloning"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -74,6 +76,37 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         0 < preprocessing["stationary_hold_weight"] <= 1,
         "stationary hold weight must be in (0, 1]",
+    )
+    _require(
+        behavioral_cloning["image_encoder"] == policy["visual_encoder"],
+        "BC and policy encoders must match",
+    )
+    expected_scalar_dimension = (
+        preprocessing["model_state_dimension"]
+        + preprocessing["categorical_condition_dimension"]
+    )
+    _require(
+        behavioral_cloning["scalar_input_dimension"] == expected_scalar_dimension,
+        "BC scalar input must equal model state plus categorical condition",
+    )
+    _require(
+        behavioral_cloning["output_dimension"] == policy["action_dimension"],
+        "BC output must match the action dimension",
+    )
+    _require(
+        behavioral_cloning["image_size"] == camera["model_width"]
+        == camera["model_height"],
+        "BC image size must match the square model input",
+    )
+    _require(behavioral_cloning["batch_size"] > 0, "BC batch size must be positive")
+    _require(behavioral_cloning["epochs"] > 0, "BC epochs must be positive")
+    _require(
+        behavioral_cloning["freeze_encoder_epochs"] < behavioral_cloning["epochs"],
+        "encoder freeze period must be shorter than training",
+    )
+    _require(
+        0 < behavioral_cloning["learning_rate"] < 1,
+        "BC learning rate must be in (0, 1)",
     )
 
     split_sets = [

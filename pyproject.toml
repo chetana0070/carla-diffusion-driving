@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carla-diffusion-driving"
-version = "0.5.0"
+version = "0.6.1"
 description = "Temporal diffusion driving policy research pipeline for CARLA"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -20,15 +20,9 @@ dev = [
 ]
 training = [
   "numpy>=1.26,<3",
-  "torch>=2.8",
-  "torchvision>=0.23",
-  "opencv-python>=4.10",
-  "pillow>=11",
-  "h5py>=3.12",
-  "tqdm>=4.67",
-  "tensorboard>=2.18",
-  "gymnasium>=1.0",
-  "stable-baselines3>=2.7",
+  "torch==2.11.0",
+  "torchvision==0.26.0",
+  "tqdm>=4.67,<5",
 ]
 simulator = [
   "carla==0.9.16",
@@ -44,3 +38,10 @@ target-version = "py310"
 [tool.mypy]
 python_version = "3.10"
 strict = true
+
+[[tool.mypy.overrides]]
+module = [
+  "carla_diffusion.bc_dataset",
+  "carla_diffusion.bc_model",
+]
+disable_error_code = ["import-not-found", "import-untyped", "misc"]

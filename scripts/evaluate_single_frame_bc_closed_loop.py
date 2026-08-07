@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 import queue
+import shutil
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -36,6 +38,7 @@ from collect_phase2_pilot import (
 from carla_diffusion.bc_dataset import build_image_transform
 from carla_diffusion.bc_model import SingleFrameBC
 from carla_diffusion.closed_loop import (
+    NoProgressMonitor,
     aggregate_episode_reports,
     latency_summary,
     longitudinal_to_pedals,
@@ -80,6 +83,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--sensor-timeout", type=float, default=30.0)
     parser.add_argument("--spectator-follow", action="store_true")
+    parser.add_argument("--expert", action="store_true")
+    parser.add_argument("--telemetry-dir", type=Path)
+    parser.add_argument(
+        "--video-dir",
+        type=Path,
+        help="optional directory for one 10 Hz ego-camera MP4 per episode",
+    )
     parser.add_argument(
         "--continue-after-collision",
         action="store_true",
@@ -92,6 +102,15 @@ def atomic_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def atomic_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
     os.replace(temporary, path)
 
 
@@ -111,6 +130,59 @@ def carla_image_to_pil(image: carla.Image) -> Image.Image:
         "raw",
         "BGRA",
     ).convert("RGB")
+
+
+class EpisodeVideoWriter:
+    """Stream CARLA BGRA observations directly to an ffmpeg MP4 encoder."""
+
+    def __init__(self, path: Path, width: int, height: int, fps: float) -> None:
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise RuntimeError("video capture requested but ffmpeg is unavailable")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self.process: subprocess.Popen[bytes] = subprocess.Popen(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "rawvideo",
+                "-pixel_format",
+                "bgra",
+                "-video_size",
+                f"{width}x{height}",
+                "-framerate",
+                f"{fps:g}",
+                "-i",
+                "-",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
+                str(path),
+            ],
+            stdin=subprocess.PIPE,
+        )
+
+    def write(self, image: carla.Image) -> None:
+        if self.process.stdin is None:
+            raise RuntimeError("ffmpeg video input pipe is unavailable")
+        self.process.stdin.write(bytes(image.raw_data))
+
+    def close(self) -> None:
+        if self.process.stdin is not None and not self.process.stdin.closed:
+            self.process.stdin.close()
+        return_code = self.process.wait(timeout=30)
+        if return_code != 0:
+            raise RuntimeError(f"ffmpeg video encoder exited with status {return_code}")
 
 
 class PolicyRuntime:
@@ -144,6 +216,7 @@ class PolicyRuntime:
         self.warmup_iterations = 20
         self.model_type = "single_frame_bc"
         self.history_frames = 1
+        self.uses_external_control = False
         dummy_image = Image.new(
             "RGB",
             (
@@ -165,6 +238,15 @@ class PolicyRuntime:
 
     def reset_episode(self) -> None:
         """Reset stateful policy context before a new route."""
+
+    def start_episode(
+        self,
+        vehicle: carla.Vehicle,
+        traffic_manager: carla.TrafficManager,
+        route: list[carla.Waypoint],
+        traffic_manager_port: int,
+    ) -> None:
+        """Configure a stateful or external controller for a new route."""
 
     @torch.inference_mode()
     def predict(
@@ -202,6 +284,34 @@ class PolicyRuntime:
         return float(steering), float(longitudinal), latency_ms
 
 
+class TrafficManagerExpertRuntime:
+    model_type = "carla_traffic_manager_expert"
+    history_frames = 0
+    warmup_iterations = 0
+    checkpoint_epoch: int | None = None
+    uses_external_control = True
+
+    def __init__(self, checkpoint_path: Path, processed_root: Path) -> None:
+        del checkpoint_path, processed_root
+
+    def reset_episode(self) -> None:
+        """Traffic Manager state is configured after the vehicle is spawned."""
+
+    def start_episode(
+        self,
+        vehicle: carla.Vehicle,
+        traffic_manager: carla.TrafficManager,
+        route: list[carla.Waypoint],
+        traffic_manager_port: int,
+    ) -> None:
+        vehicle.set_autopilot(True, traffic_manager_port)
+        traffic_manager.set_path(
+            vehicle,
+            [waypoint.transform.location for waypoint in route[1:]],
+        )
+        traffic_manager.vehicle_percentage_speed_difference(vehicle, 0.0)
+
+
 def route_command(
     route: list[carla.Waypoint],
     route_index: int,
@@ -233,6 +343,8 @@ def evaluate_episode(
     traffic_manager_port: int,
     sensor_timeout: float,
     spectator_follow: bool,
+    telemetry_dir: Path | None,
+    video_dir: Path | None,
 ) -> dict[str, Any]:
     closed_loop = config["closed_loop_evaluation"]
     episode_seed = seed + episode_number
@@ -265,7 +377,15 @@ def evaluate_episode(
     previous_longitudinal: float | None = None
     terminated_reason = "tick_limit"
     ticks_completed = 0
+    telemetry_rows: list[dict[str, Any]] = []
+    telemetry_path: Path | None = None
+    video_path: Path | None = None
+    video_writer: EpisodeVideoWriter | None = None
     delta = float(config["simulator"]["fixed_delta_seconds"])
+    no_progress = NoProgressMonitor(
+        int(closed_loop["no_progress_window_ticks"]),
+        float(closed_loop["no_progress_min_distance_m"]),
+    )
     policy.reset_episode()
 
     try:
@@ -288,6 +408,17 @@ def evaluate_episode(
         )
         camera.listen(images.put)
         actors.append(camera)
+        if video_dir is not None:
+            video_path = (
+                video_dir
+                / f"episode-{episode_number:03d}-seed-{episode_seed}-ego.mp4"
+            )
+            video_writer = EpisodeVideoWriter(
+                video_path,
+                int(config["camera"]["capture_width"]),
+                int(config["camera"]["capture_height"]),
+                1.0 / delta,
+            )
 
         collision = world.spawn_actor(
             world.get_blueprint_library().find("sensor.other.collision"),
@@ -323,8 +454,9 @@ def evaluate_episode(
             episode_seed,
         )
         actors.extend(background)
+        policy.start_episode(vehicle, traffic_manager, route, traffic_manager_port)
 
-        for _ in range(ticks):
+        for tick_index in range(ticks):
             expected_frame = world.tick()
             if spectator_follow:
                 update_spectator(world, vehicle)
@@ -336,6 +468,8 @@ def evaluate_episode(
                 raise RuntimeError(
                     f"camera/world frame mismatch: camera={image.frame}, world={expected_frame}"
                 )
+            if video_writer is not None:
+                video_writer.write(image)
             state, light_state, in_junction = state_vector(vehicle, world)
             current_transform = vehicle.get_transform()
             route_index = nearest_route_index(current_transform, route, route_index)
@@ -345,17 +479,25 @@ def evaluate_episode(
                 int(closed_loop["command_lookahead_points"]),
                 float(closed_loop["turn_threshold_degrees"]),
             )
-            steering, longitudinal, latency_ms = policy.predict(
-                image, state, command, light_state
-            )
-            throttle, brake = longitudinal_to_pedals(longitudinal)
-            vehicle.apply_control(
-                carla.VehicleControl(
-                    throttle=throttle,
-                    brake=brake,
-                    steer=max(-1.0, min(1.0, steering)),
+            if policy.uses_external_control:
+                expert_control = vehicle.get_control()
+                steering = float(expert_control.steer)
+                throttle = float(expert_control.throttle)
+                brake = float(expert_control.brake)
+                longitudinal = max(-1.0, min(1.0, throttle - brake))
+                latency_ms = 0.0
+            else:
+                steering, longitudinal, latency_ms = policy.predict(
+                    image, state, command, light_state
                 )
-            )
+                throttle, brake = longitudinal_to_pedals(longitudinal)
+                vehicle.apply_control(
+                    carla.VehicleControl(
+                        throttle=throttle,
+                        brake=brake,
+                        steer=max(-1.0, min(1.0, steering)),
+                    )
+                )
 
             location = current_transform.location
             if previous_location is not None:
@@ -371,6 +513,32 @@ def evaluate_episode(
             latencies.append(latency_ms)
             command_counts[command] += 1
             ticks_completed += 1
+            if light_state == "red":
+                no_progress.reset()
+                stalled = False
+            else:
+                stalled = no_progress.update(distance_traveled)
+            telemetry_rows.append(
+                {
+                    "tick": tick_index,
+                    "frame": image.frame,
+                    "seed": episode_seed,
+                    "route_index": route_index,
+                    "route_progress_fraction": route_index / max(1, len(route) - 1),
+                    "distance_traveled_m": distance_traveled,
+                    "speed_mps": float(state[0]),
+                    "lane_offset_m": float(state[3]),
+                    "route_command": command,
+                    "traffic_light_state": light_state,
+                    "steering": steering,
+                    "longitudinal": longitudinal,
+                    "throttle": throttle,
+                    "brake": brake,
+                    "collision_contact": image.frame in collision_frames,
+                    "no_progress": stalled,
+                    "policy_pipeline_latency_ms": latency_ms,
+                }
+            )
 
             if light_state == "red" and not in_junction:
                 red_armed = True
@@ -387,8 +555,15 @@ def evaluate_episode(
             if collision_frames and bool(closed_loop["terminate_on_collision"]):
                 terminated_reason = "collision"
                 break
+            if stalled:
+                terminated_reason = "no_progress"
+                break
 
         latency = latency_summary(latencies)
+        if telemetry_dir is not None:
+            telemetry_name = f"episode-{episode_number:03d}-seed-{episode_seed}.jsonl"
+            telemetry_path = telemetry_dir / telemetry_name
+            atomic_jsonl(telemetry_path, telemetry_rows)
         return {
             "episode": episode_number,
             "seed": episode_seed,
@@ -418,8 +593,12 @@ def evaluate_episode(
             ),
             "route_command_counts": dict(sorted(command_counts.items())),
             "policy_pipeline_latency": latency,
+            "telemetry_file": str(telemetry_path) if telemetry_path is not None else None,
+            "video_file": str(video_path) if video_path is not None else None,
         }
     finally:
+        if video_writer is not None:
+            video_writer.close()
         for actor in reversed(actors):
             try:
                 if "sensor" in actor.type_id:
@@ -441,7 +620,7 @@ def main() -> int:
         closed_loop["terminate_on_collision"] = False
     checkpoint_path = args.checkpoint.resolve()
     processed_root = args.processed_root.resolve()
-    if not checkpoint_path.is_file():
+    if not args.expert and not checkpoint_path.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
     map_name = str(args.map or closed_loop["map"])
     episodes = int(args.episodes or closed_loop["episodes"])
@@ -455,7 +634,11 @@ def main() -> int:
     if episodes < 1 or ticks < 1 or background_vehicles < 0:
         raise ValueError("invalid closed-loop evaluation cardinality")
 
-    policy = PolicyRuntime(checkpoint_path, processed_root)
+    policy = (
+        TrafficManagerExpertRuntime(checkpoint_path, processed_root)
+        if args.expert
+        else PolicyRuntime(checkpoint_path, processed_root)
+    )
     client = carla.Client(args.host, args.port)
     client.set_timeout(120.0)
     world = client.get_world()
@@ -490,6 +673,8 @@ def main() -> int:
                 traffic_manager_port=args.traffic_manager_port,
                 sensor_timeout=args.sensor_timeout,
                 spectator_follow=args.spectator_follow,
+                telemetry_dir=args.telemetry_dir.resolve() if args.telemetry_dir else None,
+                video_dir=args.video_dir.resolve() if args.video_dir else None,
             )
             episode_reports.append(report)
             print(json.dumps(report), flush=True)
@@ -512,15 +697,16 @@ def main() -> int:
     ]
     aggregate["max_policy_pipeline_latency_ms"] = max(all_maximums)
     aggregate["latency_budget_ms"] = project_config["evaluation"]["max_policy_latency_ms"]
-    aggregate["latency_gate_passed"] = max(all_maximums) <= float(
-        project_config["evaluation"]["max_policy_latency_ms"]
+    aggregate["latency_gate_passed"] = policy.uses_external_control or (
+        max(all_maximums)
+        <= float(project_config["evaluation"]["max_policy_latency_ms"])
     )
     final_report = {
         "status": "passed",
         "model_type": policy.model_type,
         "observation_history_frames": policy.history_frames,
-        "checkpoint": str(checkpoint_path),
-        "checkpoint_sha256": checkpoint_sha256(checkpoint_path),
+        "checkpoint": None if args.expert else str(checkpoint_path),
+        "checkpoint_sha256": None if args.expert else checkpoint_sha256(checkpoint_path),
         "checkpoint_epoch": policy.checkpoint_epoch,
         "policy_warmup_iterations": policy.warmup_iterations,
         "terminate_on_collision": bool(closed_loop["terminate_on_collision"]),

@@ -188,3 +188,21 @@ python scripts/train_temporal_bc.py \
 The shared EfficientNet-B0 and GRU model uses the same Phase 3 windows, weights,
 route split, metric definitions, and checkpoint-selection rule as single-frame
 BC. This isolates temporal context before action-chunk diffusion is introduced.
+
+Benchmark and evaluate the selected temporal checkpoint using the frozen Phase 4
+route contract:
+
+```bash
+python scripts/benchmark_temporal_bc_latency.py
+
+CARLA_RENDER_MODE=live \
+PHASE5_EPISODES=1 \
+PHASE5_TICKS_PER_EPISODE=300 \
+PHASE5_BACKGROUND_VEHICLES=2 \
+PHASE5_REPORT=artifacts/evaluations/phase5_closed_loop_smoke_v081.json \
+./scripts/run_phase5_closed_loop.sh
+```
+
+The temporal runtime repeats the first synchronized observation to initialize
+its four-frame buffer, then rolls forward one frame per control tick. The buffer
+is reset between episodes to prevent route leakage.

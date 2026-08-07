@@ -60,3 +60,47 @@ python scripts/train_temporal_bc.py \
 
 Temporal BC is successful only if it materially improves closed-loop route
 progress or safety. Better offline MSE alone is insufficient.
+
+## Closed-loop evaluation
+
+The Phase 5 runtime uses a synchronized four-frame image/state buffer. At the
+first control tick, the first observation is repeated four times so control is
+available immediately. Each subsequent tick appends one observation and drops
+the oldest. History is reset before every episode.
+
+Run the model-only batch-one benchmark first:
+
+```bash
+python scripts/benchmark_temporal_bc_latency.py
+```
+
+Then run a live one-episode smoke test before the frozen three-seed evaluation:
+
+```bash
+CARLA_RENDER_MODE=live \
+PHASE5_EPISODES=1 \
+PHASE5_TICKS_PER_EPISODE=300 \
+PHASE5_BACKGROUND_VEHICLES=2 \
+PHASE5_REPORT=artifacts/evaluations/phase5_closed_loop_smoke_v081.json \
+./scripts/run_phase5_closed_loop.sh
+```
+
+The final benchmark must use off-screen rendering, three episodes, 600 ticks,
+eight background vehicles, and seeds beginning at 20260901—the identical Phase
+4 contract.
+
+If a live visualization closes immediately after an early collision, use the
+visualization-only continuation override:
+
+```bash
+CARLA_RENDER_MODE=live \
+PHASE5_CONTINUE_AFTER_COLLISION=1 \
+PHASE5_EPISODES=1 \
+PHASE5_TICKS_PER_EPISODE=300 \
+PHASE5_BACKGROUND_VEHICLES=2 \
+PHASE5_REPORT=artifacts/evaluations/phase5_visual_debug_v082.json \
+./scripts/run_phase5_closed_loop.sh
+```
+
+This override is prohibited for the frozen three-seed comparison because it
+changes the termination contract.

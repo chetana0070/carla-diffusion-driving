@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carla-diffusion-driving"
-version = "0.8.0"
+version = "0.8.2"
 description = "Temporal diffusion driving policy research pipeline for CARLA"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -45,5 +45,6 @@ module = [
   "carla_diffusion.bc_model",
   "carla_diffusion.temporal_bc_dataset",
   "carla_diffusion.temporal_bc_model",
+  "carla_diffusion.temporal_runtime",
 ]
 disable_error_code = ["import-not-found", "import-untyped", "misc"]

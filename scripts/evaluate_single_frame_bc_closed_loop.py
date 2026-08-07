@@ -80,6 +80,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--sensor-timeout", type=float, default=30.0)
     parser.add_argument("--spectator-follow", action="store_true")
+    parser.add_argument(
+        "--continue-after-collision",
+        action="store_true",
+        help="visualization-only override; frozen evaluation still terminates on collision",
+    )
     return parser.parse_args()
 
 
@@ -137,6 +142,8 @@ class PolicyRuntime:
         self.normalized_state_clip = float(bc["normalized_state_clip"])
         self.image_transform = build_image_transform(int(bc["image_size"]), augment=False)
         self.warmup_iterations = 20
+        self.model_type = "single_frame_bc"
+        self.history_frames = 1
         dummy_image = Image.new(
             "RGB",
             (
@@ -155,6 +162,9 @@ class PolicyRuntime:
                 dummy_tensor = self.image_transform(dummy_image).unsqueeze(0).to(self.device)
                 self.model(dummy_tensor, dummy_context)
         torch.cuda.synchronize()
+
+    def reset_episode(self) -> None:
+        """Reset stateful policy context before a new route."""
 
     @torch.inference_mode()
     def predict(
@@ -256,6 +266,7 @@ def evaluate_episode(
     terminated_reason = "tick_limit"
     ticks_completed = 0
     delta = float(config["simulator"]["fixed_delta_seconds"])
+    policy.reset_episode()
 
     try:
         vehicle = world.try_spawn_actor(
@@ -426,6 +437,8 @@ def main() -> int:
     args = parse_args()
     project_config = load_and_validate_config(PROJECT_ROOT / "configs" / "project.json")
     closed_loop = project_config["closed_loop_evaluation"]
+    if args.continue_after_collision:
+        closed_loop["terminate_on_collision"] = False
     checkpoint_path = args.checkpoint.resolve()
     processed_root = args.processed_root.resolve()
     if not checkpoint_path.is_file():
@@ -504,10 +517,13 @@ def main() -> int:
     )
     final_report = {
         "status": "passed",
+        "model_type": policy.model_type,
+        "observation_history_frames": policy.history_frames,
         "checkpoint": str(checkpoint_path),
         "checkpoint_sha256": checkpoint_sha256(checkpoint_path),
         "checkpoint_epoch": policy.checkpoint_epoch,
         "policy_warmup_iterations": policy.warmup_iterations,
+        "terminate_on_collision": bool(closed_loop["terminate_on_collision"]),
         "map": world.get_map().name,
         "seed": seed,
         "episodes": episode_reports,

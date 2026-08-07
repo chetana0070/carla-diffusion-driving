@@ -157,3 +157,18 @@ This baseline uses only the current frame and predicts the first expert action.
 It establishes the controlled comparison for temporal BC and temporal action
 diffusion. See `docs/phase4_single_frame_bc.md` for the metric and checkpoint
 selection contract.
+
+Evaluate the selected checkpoint under actual CARLA feedback before beginning
+the temporal model:
+
+```bash
+CARLA_RENDER_MODE=live \
+PHASE4_EPISODES=1 \
+PHASE4_TICKS_PER_EPISODE=300 \
+PHASE4_BACKGROUND_VEHICLES=2 \
+PHASE4_REPORT=artifacts/evaluations/phase4_closed_loop_smoke.json \
+./scripts/run_phase4_closed_loop.sh
+```
+
+The ego vehicle is controlled only by the learned policy. The evaluator records
+route progress, safety events, control smoothness, and end-to-end policy latency.

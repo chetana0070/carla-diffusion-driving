@@ -15,6 +15,23 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+def build_image_transform(image_size: int, *, augment: bool = False) -> v2.Compose:
+    if image_size <= 0:
+        raise ValueError("image size must be positive")
+    transforms: list[Any] = [v2.Resize((image_size, image_size), antialias=True)]
+    if augment:
+        # Geometry is intentionally unchanged: flips alter left/right driving semantics.
+        transforms.append(v2.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1))
+    transforms.extend(
+        [
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        ]
+    )
+    return v2.Compose(transforms)
+
+
 class SingleFrameWindowDataset(Dataset[dict[str, torch.Tensor]]):
     """Expose the current frame/action while preserving route-level splits."""
 
@@ -45,18 +62,7 @@ class SingleFrameWindowDataset(Dataset[dict[str, torch.Tensor]]):
         self.state_mean = torch.tensor(normalization["state_mean"], dtype=torch.float32)
         self.state_std = torch.tensor(normalization["state_std"], dtype=torch.float32)
         self.normalized_state_clip = normalized_state_clip
-        transforms: list[Any] = [v2.Resize((image_size, image_size), antialias=True)]
-        if augment:
-            # Geometry is intentionally unchanged: flips alter left/right driving semantics.
-            transforms.append(v2.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1))
-        transforms.extend(
-            [
-                v2.ToImage(),
-                v2.ToDtype(torch.float32, scale=True),
-                v2.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-            ]
-        )
-        self.image_transform = v2.Compose(transforms)
+        self.image_transform = build_image_transform(image_size, augment=augment)
 
     def __len__(self) -> int:
         return len(self.rows)

@@ -29,6 +29,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "dataset",
         "preprocessing",
         "behavioral_cloning",
+        "closed_loop_evaluation",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -40,6 +41,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     dataset = config["dataset"]
     preprocessing = config["preprocessing"]
     behavioral_cloning = config["behavioral_cloning"]
+    closed_loop = config["closed_loop_evaluation"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -111,6 +113,17 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         behavioral_cloning["normalized_state_clip"] > 0,
         "normalized-state clip must be positive",
+    )
+    _require(closed_loop["episodes"] > 0, "closed-loop episodes must be positive")
+    _require(
+        closed_loop["ticks_per_episode"] > 0,
+        "closed-loop ticks per episode must be positive",
+    )
+    _require(closed_loop["route_points"] >= 20, "closed-loop route is too short")
+    _require(closed_loop["route_spacing_m"] > 0, "route spacing must be positive")
+    _require(
+        closed_loop["command_lookahead_points"] > 0,
+        "route-command lookahead must be positive",
     )
 
     split_sets = [

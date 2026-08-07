@@ -73,6 +73,18 @@
     "steering_tolerance": 0.05,
     "longitudinal_tolerance": 0.1
   },
+  "closed_loop_evaluation": {
+    "map": "Town01",
+    "episodes": 3,
+    "ticks_per_episode": 600,
+    "background_vehicles": 8,
+    "route_points": 180,
+    "route_spacing_m": 5.0,
+    "command_lookahead_points": 4,
+    "turn_threshold_degrees": 15.0,
+    "terminate_on_collision": true,
+    "seed": 20260901
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,

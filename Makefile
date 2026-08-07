@@ -1,4 +1,4 @@
-.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train
+.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop
 
 test:
 	python -m unittest discover -s tests -v
@@ -29,3 +29,6 @@ phase4-train-smoke:
 
 phase4-train:
 	python scripts/train_single_frame_bc.py --pretrained
+
+phase4-closed-loop:
+	./scripts/run_phase4_closed_loop.sh

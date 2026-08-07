@@ -22,6 +22,8 @@ class ConfigTests(unittest.TestCase):
             config["closed_loop_evaluation"]["expert_oracle_protocol_version"],
             "2.0.0",
         )
+        self.assertEqual(config["corrective_collection"]["expert_recovery_ticks"], 80)
+        self.assertEqual(config["corrective_collection"]["minimum_free_disk_gib"], 90)
         self.assertEqual(config["temporal_behavioral_cloning"]["history_frames"], 4)
         self.assertEqual(config["temporal_behavioral_cloning"]["batch_size"], 8)
         self.assertTrue(config["simulator"]["synchronous_mode"])

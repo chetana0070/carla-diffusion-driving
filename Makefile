@@ -1,4 +1,4 @@
-.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train phase5-latency phase5-closed-loop phase5-expert-oracle phase5-diagnostics
+.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train phase5-latency phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect phase6-audit
 
 test:
 	python -m unittest discover -s tests -v
@@ -53,3 +53,9 @@ phase5-expert-oracle:
 
 phase5-diagnostics:
 	python scripts/summarize_phase5_diagnostics.py
+
+phase6-collect:
+	./scripts/run_phase6_corrections.sh
+
+phase6-audit:
+	python scripts/audit_phase6_corrections.py

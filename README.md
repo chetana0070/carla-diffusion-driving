@@ -242,3 +242,19 @@ map/seed contract and decides whether the route harness or learned policy is the
 primary blocker. The expert capability gate is versioned and combines route
 progress, physical distance, safety, and liveness so legal signal stops cannot
 dominate a single progress threshold. See `docs/phase5_2_failure_diagnosis.md`.
+
+## Phase 6 corrective demonstrations
+
+The expert-oracle comparison confirms that temporal BC—not the CARLA harness—is
+the primary closed-loop blocker. Phase 6 therefore rolls out temporal BC and
+transfers the same vehicle to Traffic Manager when observable lane, heading,
+lead-vehicle, or liveness thresholds fire. Only contiguous expert recovery
+segments are published:
+
+```bash
+./scripts/run_phase6_corrections.sh
+python scripts/audit_phase6_corrections.py
+```
+
+Corrective data remains training-only. Frozen validation and test routes are
+not expanded or relabeled. See `docs/phase6_corrective_collection.md`.

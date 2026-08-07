@@ -30,6 +30,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "preprocessing",
         "behavioral_cloning",
         "closed_loop_evaluation",
+        "corrective_collection",
         "temporal_behavioral_cloning",
         "evaluation",
     }
@@ -43,6 +44,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     preprocessing = config["preprocessing"]
     behavioral_cloning = config["behavioral_cloning"]
     closed_loop = config["closed_loop_evaluation"]
+    corrective = config["corrective_collection"]
     temporal_bc = config["temporal_behavioral_cloning"]
     evaluation = config["evaluation"]
 
@@ -162,6 +164,35 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         closed_loop["expert_oracle_max_no_progress_terminations"] >= 0,
         "expert-oracle no-progress allowance must be non-negative",
+    )
+    _require(corrective["episodes"] > 0, "corrective episodes must be positive")
+    _require(
+        corrective["minimum_free_disk_gib"]
+        > corrective["stop_collection_free_disk_gib"]
+        > 0,
+        "invalid corrective storage thresholds",
+    )
+    _require(
+        corrective["ticks_per_episode"] >= corrective["expert_recovery_ticks"],
+        "corrective rollout must fit the recovery segment",
+    )
+    _require(
+        corrective["minimum_published_samples"]
+        >= camera["history_frames"] + policy["action_horizon"],
+        "corrective episodes must support at least one temporal window",
+    )
+    _require(
+        corrective["expert_recovery_ticks"] >= corrective["minimum_published_samples"],
+        "expert recovery must satisfy the publication minimum",
+    )
+    _require(
+        0 < corrective["minimum_intervention_episodes"] <= corrective["episodes"],
+        "invalid corrective intervention episode gate",
+    )
+    _require(
+        corrective["lane_offset_trigger_m"] > 0
+        and corrective["heading_error_trigger_degrees"] > 0,
+        "corrective geometry thresholds must be positive",
     )
     _require(
         temporal_bc["history_frames"] == camera["history_frames"],

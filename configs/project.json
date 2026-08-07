@@ -94,6 +94,24 @@
     "expert_oracle_max_no_progress_terminations": 0,
     "seed": 20260901
   },
+  "corrective_collection": {
+    "minimum_free_disk_gib": 90,
+    "stop_collection_free_disk_gib": 85,
+    "episodes": 10,
+    "ticks_per_episode": 300,
+    "background_vehicles": 8,
+    "seed": 20261001,
+    "warmup_ticks": 4,
+    "lane_offset_trigger_m": 0.45,
+    "heading_error_trigger_degrees": 10.0,
+    "unsafe_lead_distance_m": 8.0,
+    "unsafe_lead_min_longitudinal": 0.05,
+    "stall_trigger_ticks": 20,
+    "stationary_speed_mps": 0.5,
+    "expert_recovery_ticks": 80,
+    "minimum_published_samples": 20,
+    "minimum_intervention_episodes": 3
+  },
   "temporal_behavioral_cloning": {
     "history_frames": 4,
     "image_encoder": "efficientnet_b0",

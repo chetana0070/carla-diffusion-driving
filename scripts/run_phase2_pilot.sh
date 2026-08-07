@@ -7,6 +7,7 @@ SERVER_LOG="$PROJECT_ROOT/artifacts/evaluations/carla_server_phase2.log"
 EPISODES="${PHASE2_EPISODES:-10}"
 TICKS_PER_EPISODE="${PHASE2_TICKS_PER_EPISODE:-600}"
 BACKGROUND_VEHICLES="${PHASE2_BACKGROUND_VEHICLES:-8}"
+GUARANTEED_LEAD_EPISODES="${PHASE2_GUARANTEED_LEAD_EPISODES:-0}"
 DATASET_ROOT="${PHASE2_DATASET_ROOT:-data/raw/phase2_pilot}"
 REPORT_PATH="${PHASE2_REPORT_PATH:-artifacts/evaluations/phase2_pilot_report.json}"
 RENDER_MODE="${CARLA_RENDER_MODE:-offscreen}"
@@ -79,6 +80,7 @@ python scripts/collect_phase2_pilot.py \
     --episodes "$EPISODES" \
     --ticks-per-episode "$TICKS_PER_EPISODE" \
     --background-vehicles "$BACKGROUND_VEHICLES" \
+    --guaranteed-lead-episodes "$GUARANTEED_LEAD_EPISODES" \
     --seed 20260803 \
     --dataset-root "$DATASET_ROOT" \
     --report "$REPORT_PATH" \

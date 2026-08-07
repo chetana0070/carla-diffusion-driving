@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import re
 import shutil
-from typing import Any, Mapping
+from collections.abc import Mapping
+from dataclasses import dataclass
+from itertools import pairwise
+from pathlib import Path
+from typing import Any
 
 from .schema import SampleValidationError, validate_sample
-
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -213,7 +214,7 @@ def validate_dataset(dataset_root: Path) -> dict[str, Any]:
                 ) as error:
                     local_issues.append(f"line {line_number}: {error}")
 
-        if frames and any(current <= previous for previous, current in zip(frames, frames[1:])):
+        if frames and any(current <= previous for previous, current in pairwise(frames)):
             local_issues.append("frame IDs are not strictly increasing")
         if metadata is not None:
             expected_metadata = {

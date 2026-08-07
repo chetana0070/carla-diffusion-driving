@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Any, Mapping, Sequence
-
+from typing import Any
 
 ROUTE_COMMANDS = {"follow_lane", "left", "right", "straight"}
 TRAFFIC_LIGHT_STATES = {"none", "red", "yellow", "green", "unknown"}

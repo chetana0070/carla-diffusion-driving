@@ -9,12 +9,13 @@ IDs, actor cleanup, and restoration of asynchronous world settings.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import json
-from pathlib import Path
 import queue
 import statistics
 import time
+from collections import Counter
+from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import carla
@@ -47,7 +48,7 @@ def select_vehicle_blueprint(world: carla.World) -> carla.ActorBlueprint:
     candidates = preferred or library.filter("vehicle.*")
     if not candidates:
         raise RuntimeError("no vehicle blueprint is available")
-    blueprint = sorted(candidates, key=lambda item: item.id)[0]
+    blueprint = min(candidates, key=lambda item: item.id)
     if blueprint.has_attribute("role_name"):
         blueprint.set_attribute("role_name", "hero")
     return blueprint
@@ -155,11 +156,11 @@ def main() -> int:
 
         if len(set(frame_ids)) != args.ticks:
             raise RuntimeError("duplicate camera frame IDs detected")
-        if any(b - a != 1 for a, b in zip(frame_ids, frame_ids[1:])):
+        if any(b - a != 1 for a, b in pairwise(frame_ids)):
             raise RuntimeError("non-consecutive camera frame IDs detected")
         if set(dimensions) != {(args.width, args.height)}:
             raise RuntimeError(f"unexpected camera dimensions: {dict(dimensions)}")
-    except Exception as error:  # report failure after cleanup
+    except Exception as error:  # noqa: BLE001 - report failure after cleanup
         failure = f"{type(error).__name__}: {error}"
     finally:
         for actor in reversed(actors):

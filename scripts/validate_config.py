@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Validate the frozen Phase 0 configuration."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from carla_diffusion.config import ConfigError, load_and_validate_config  # noqa: E402
+from carla_diffusion.config import ConfigError, load_and_validate_config
 
 
 def main() -> int:
@@ -27,4 +27,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

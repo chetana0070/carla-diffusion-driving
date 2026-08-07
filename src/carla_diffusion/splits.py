@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 
 @dataclass(frozen=True, order=True)
@@ -45,4 +45,3 @@ def split_routes(
     for values in output.values():
         values.sort()
     return output
-

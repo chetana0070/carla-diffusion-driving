@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import argparse
-from io import BytesIO
 import json
 import math
-from pathlib import Path
 import queue
 import random
 import sys
 import time
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import carla
@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--ticks-per-episode", type=int, default=600)
     parser.add_argument("--background-vehicles", type=int, default=8)
+    parser.add_argument("--guaranteed-lead-episodes", type=int, default=0)
     parser.add_argument("--seed", type=int, default=20260803)
     parser.add_argument("--route-spacing", type=float, default=5.0)
     parser.add_argument("--route-points", type=int, default=180)
@@ -81,7 +82,7 @@ def select_vehicle_blueprint(world: carla.World, role_name: str) -> carla.ActorB
     candidates = preferred or library.filter("vehicle.*")
     if not candidates:
         raise RuntimeError("no vehicle blueprint is available")
-    blueprint = sorted(candidates, key=lambda item: item.id)[0]
+    blueprint = min(candidates, key=lambda item: item.id)
     if blueprint.has_attribute("role_name"):
         blueprint.set_attribute("role_name", role_name)
     return blueprint
@@ -190,20 +191,36 @@ def traffic_light_observation(
     return mapping.get(light.get_state(), "unknown"), float(distance)
 
 
+LEAD_VEHICLE_MAX_DISTANCE_M = 80.0
+
+
 def lead_vehicle_observation(vehicle: carla.Vehicle, world: carla.World) -> tuple[float, float]:
+    """Return the nearest vehicle ahead in the ego lane, within sensor range."""
     transform = vehicle.get_transform()
     forward = transform.get_forward_vector()
     right = transform.get_right_vector()
     ego_velocity = vehicle.get_velocity()
+    world_map = world.get_map()
+    ego_waypoint = world_map.get_waypoint(transform.location, project_to_road=True)
     best_distance = math.inf
     relative_speed = 0.0
     for actor in world.get_actors().filter("vehicle.*"):
         if actor.id == vehicle.id:
             continue
+        actor_waypoint = world_map.get_waypoint(actor.get_location(), project_to_road=True)
+        if (
+            actor_waypoint.road_id != ego_waypoint.road_id
+            or actor_waypoint.lane_id != ego_waypoint.lane_id
+        ):
+            continue
         offset = actor.get_location() - transform.location
         longitudinal = dot(offset, forward)
         lateral = abs(dot(offset, right))
-        if 0.0 < longitudinal < best_distance and lateral < 2.5:
+        if (
+            0.0 < longitudinal <= LEAD_VEHICLE_MAX_DISTANCE_M
+            and longitudinal < best_distance
+            and lateral < 2.5
+        ):
             best_distance = longitudinal
             relative_speed = dot(actor.get_velocity(), forward) - dot(ego_velocity, forward)
     if math.isinf(best_distance):
@@ -290,6 +307,40 @@ def spawn_background(
     return actors
 
 
+def spawn_route_lead(
+    world: carla.World,
+    traffic_manager: carla.TrafficManager,
+    traffic_manager_port: int,
+    route: list[carla.Waypoint],
+) -> tuple[carla.Vehicle, int]:
+    """Spawn a slower lead vehicle 25--50 m ahead on the expert route."""
+    upper = min(11, len(route) - 1)
+    for route_index in range(5, upper):
+        route_transform = route[route_index].transform
+        spawn_transform = carla.Transform(
+            carla.Location(
+                x=route_transform.location.x,
+                y=route_transform.location.y,
+                z=route_transform.location.z + 0.5,
+            ),
+            route_transform.rotation,
+        )
+        lead = world.try_spawn_actor(
+            select_vehicle_blueprint(world, "lead"),
+            spawn_transform,
+        )
+        if lead is None:
+            continue
+        lead.set_autopilot(True, traffic_manager_port)
+        traffic_manager.set_path(
+            lead,
+            [waypoint.transform.location for waypoint in route[route_index + 1 :]],
+        )
+        traffic_manager.vehicle_percentage_speed_difference(lead, 30.0)
+        return lead, route_index
+    raise RuntimeError("failed to spawn a guaranteed lead vehicle on the route")
+
+
 def collect_episode(
     *,
     args: argparse.Namespace,
@@ -313,7 +364,7 @@ def collect_episode(
     )
     metadata = {
         "schema_version": "1.0.0",
-        "collector_version": "0.3.0",
+        "collector_version": "0.4.3",
         "carla_server_version": "0.9.16",
         "map": world.get_map().name,
         "seed": episode_seed,
@@ -321,6 +372,7 @@ def collect_episode(
         "requested_ticks": args.ticks_per_episode,
         "fixed_delta_seconds": config["simulator"]["fixed_delta_seconds"],
         "expert": "carla_traffic_manager",
+        "lead_vehicle_max_distance_m": LEAD_VEHICLE_MAX_DISTANCE_M,
     }
     writer = AtomicEpisodeWriter(args.dataset_root, episode_id, route_id, metadata)
     actors: list[carla.Actor] = []
@@ -330,6 +382,8 @@ def collect_episode(
     route_index = 0
     red_armed = False
     red_light_violations = 0
+    guaranteed_lead = episode_number < args.guaranteed_lead_episodes
+    lead_route_index: int | None = None
 
     try:
         vehicle = world.try_spawn_actor(
@@ -362,6 +416,15 @@ def collect_episode(
         invasion = world.spawn_actor(invasion_bp, carla.Transform(), attach_to=vehicle)
         invasion.listen(lambda event: lane_invasion_frames.add(event.frame))
         actors.append(invasion)
+
+        if guaranteed_lead:
+            lead, lead_route_index = spawn_route_lead(
+                world,
+                traffic_manager,
+                args.traffic_manager_port,
+                route,
+            )
+            actors.append(lead)
 
         background = spawn_background(
             world,
@@ -443,6 +506,8 @@ def collect_episode(
                 "collision_events": len(collision_frames),
                 "lane_invasion_events": len(lane_invasion_frames),
                 "red_light_violations": red_light_violations,
+                "guaranteed_lead_vehicle": guaranteed_lead,
+                "lead_spawn_route_index": lead_route_index,
             }
         )
         return {
@@ -451,6 +516,7 @@ def collect_episode(
             "samples": summary.samples,
             "image_bytes": summary.image_bytes,
             "route_progress_fraction": route_index / max(1, len(route) - 1),
+            "guaranteed_lead_vehicle": guaranteed_lead,
         }
     except Exception as error:
         writer.abort(f"{type(error).__name__}: {error}")
@@ -473,11 +539,48 @@ def main() -> int:
     args = parse_args()
     if args.episodes < 1 or args.ticks_per_episode < 1:
         raise ValueError("episodes and ticks-per-episode must be positive")
+    if not 0 <= args.guaranteed_lead_episodes <= args.episodes:
+        raise ValueError("guaranteed-lead-episodes must be between 0 and episodes")
     config = load_and_validate_config(PROJECT_ROOT / "configs" / "project.json")
     args.dataset_root.mkdir(parents=True, exist_ok=True)
     minimum_free = float(config["dataset"]["minimum_free_disk_gib"])
     stop_free = float(config["dataset"]["stop_collection_free_disk_gib"])
     available = free_gib(args.dataset_root)
+    expected_samples = args.episodes * args.ticks_per_episode
+    completed_directories = [
+        path
+        for path in args.dataset_root.iterdir()
+        if path.is_dir() and not path.name.startswith(".")
+    ]
+    if completed_directories:
+        existing_validation = validate_dataset(args.dataset_root)
+        correct_cardinality = (
+            existing_validation.get("episodes") == args.episodes
+            and existing_validation.get("samples") == expected_samples
+        )
+        if existing_validation["status"] == "passed" and correct_cardinality:
+            report = {
+                "status": "passed",
+                "failure": None,
+                "reused_existing_dataset": True,
+                "requested_episodes": args.episodes,
+                "completed_episodes": existing_validation["episodes"],
+                "ticks_per_episode": args.ticks_per_episode,
+                "elapsed_wall_seconds": 0.0,
+                "free_disk_gib_after": round(free_gib(args.dataset_root), 3),
+                "episodes": existing_validation["episode_reports"],
+                "validation": existing_validation,
+            }
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            print("Existing dataset already satisfies the requested pilot contract.")
+            print(json.dumps(report, indent=2))
+            return 0
+        raise DatasetError(
+            "dataset root contains existing episodes but does not satisfy the "
+            "requested cardinality; use a different dataset root"
+        )
+
     if available < minimum_free:
         raise DatasetError(
             f"collection requires {minimum_free:.1f} GiB free; "
@@ -526,7 +629,7 @@ def main() -> int:
                 f"{report['image_bytes'] / (1024**2):.1f} MiB images",
                 flush=True,
             )
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - convert failure into the run report
         failure = f"{type(error).__name__}: {error}"
     finally:
         try:
@@ -538,7 +641,6 @@ def main() -> int:
     validation = validate_dataset(args.dataset_root)
     if validation["status"] != "passed" and failure is None:
         failure = "dataset validation failed"
-    expected_samples = args.episodes * args.ticks_per_episode
     if failure is None and (
         validation["episodes"] != args.episodes or validation["samples"] != expected_samples
     ):

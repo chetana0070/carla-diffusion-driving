@@ -106,3 +106,14 @@ start below 100 GiB free. See `docs/phase2_data_pilot.md` for the exit gate.
 For visual debugging, prefix either runner with `CARLA_RENDER_MODE=live`. This
 opens a Low-quality chase-camera window; automated and benchmark execution stays
 off-screen by default.
+
+Audit the completed pilot before expanding collection:
+
+```bash
+python scripts/audit_phase2_dataset.py data/raw/phase2_pilot
+```
+
+The audit measures temporal-window yield, control and state coverage, route
+commands, traffic context, safety events, JPEG integrity, and per-episode
+balance. It produces JSON, Markdown, CSV, and a labeled contact sheet under
+`artifacts/evaluations/`.

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -106,6 +107,8 @@ def train_epoch(
         with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
             prediction = model(batch["image"], batch["scalar_context"])
             loss = weighted_action_mse(prediction, batch["target"], batch["weight"])
+        if not bool(torch.isfinite(loss)):
+            raise FloatingPointError(f"non-finite training loss at batch {batch_index}")
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -140,8 +143,13 @@ def evaluate(
         if max_batches is not None and batch_index >= max_batches:
             break
         batch = to_device(host_batch, device)
-        with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
-            prediction = model(batch["image"], batch["scalar_context"])
+        # Validation stays in FP32 so checkpoint selection cannot be corrupted
+        # by an isolated half-precision overflow on a held-out route.
+        prediction = model(batch["image"], batch["scalar_context"])
+        if not bool(torch.all(torch.isfinite(prediction))):
+            raise FloatingPointError(f"non-finite prediction at evaluation batch {batch_index}")
+        if not bool(torch.all(torch.isfinite(batch["target"]))):
+            raise FloatingPointError(f"non-finite target at evaluation batch {batch_index}")
         error = (prediction.float() - batch["target"]).cpu()
         batch_weights = batch["weight"].cpu().reshape(-1)
         per_sample_mse = torch.mean(torch.square(error), dim=1)
@@ -212,10 +220,24 @@ def main() -> int:
     image_size = int(bc_config["image_size"])
     datasets = {
         "train": SingleFrameWindowDataset(
-            processed_root, "train", image_size=image_size, augment=True
+            processed_root,
+            "train",
+            image_size=image_size,
+            augment=True,
+            normalized_state_clip=float(bc_config["normalized_state_clip"]),
         ),
-        "validation": SingleFrameWindowDataset(processed_root, "validation", image_size=image_size),
-        "test": SingleFrameWindowDataset(processed_root, "test", image_size=image_size),
+        "validation": SingleFrameWindowDataset(
+            processed_root,
+            "validation",
+            image_size=image_size,
+            normalized_state_clip=float(bc_config["normalized_state_clip"]),
+        ),
+        "test": SingleFrameWindowDataset(
+            processed_root,
+            "test",
+            image_size=image_size,
+            normalized_state_clip=float(bc_config["normalized_state_clip"]),
+        ),
     }
     loaders = {
         name: make_loader(
@@ -270,8 +292,11 @@ def main() -> int:
         epoch_record = {"epoch": epoch, "training_weighted_mse": training_loss, **validation}
         history.append(epoch_record)
         print(json.dumps(epoch_record), flush=True)
-        if float(validation["joint_rmse"]) < best_validation:
-            best_validation = float(validation["joint_rmse"])
+        validation_joint_rmse = float(validation["joint_rmse"])
+        if not math.isfinite(validation_joint_rmse):
+            raise FloatingPointError(f"non-finite validation RMSE at epoch {epoch}")
+        if validation_joint_rmse < best_validation:
+            best_validation = validation_joint_rmse
             best_epoch = epoch
             epochs_without_improvement = 0
             temporary_checkpoint = checkpoint_path.with_suffix(".pt.tmp")
@@ -291,6 +316,8 @@ def main() -> int:
             if epochs_without_improvement >= int(bc_config["early_stopping_patience"]):
                 break
 
+    if not checkpoint_path.is_file():
+        raise RuntimeError("training completed without a finite validation checkpoint")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
     test_metrics = evaluate(

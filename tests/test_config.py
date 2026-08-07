@@ -15,6 +15,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["preprocessing"]["model_state_dimension"], 10)
         self.assertEqual(config["behavioral_cloning"]["scalar_input_dimension"], 19)
         self.assertEqual(config["behavioral_cloning"]["output_dimension"], 2)
+        self.assertEqual(config["behavioral_cloning"]["normalized_state_clip"], 10.0)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

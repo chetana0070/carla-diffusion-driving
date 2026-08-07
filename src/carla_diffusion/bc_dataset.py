@@ -25,9 +25,12 @@ class SingleFrameWindowDataset(Dataset[dict[str, torch.Tensor]]):
         *,
         image_size: int = 224,
         augment: bool = False,
+        normalized_state_clip: float = 10.0,
     ) -> None:
         if split not in {"train", "validation", "test"}:
             raise ValueError(f"invalid split: {split}")
+        if normalized_state_clip <= 0:
+            raise ValueError("normalized-state clip must be positive")
         root = Path(processed_root).resolve()
         report = _load_json(root / "report.json")
         normalization = _load_json(root / "normalization.json")
@@ -41,6 +44,7 @@ class SingleFrameWindowDataset(Dataset[dict[str, torch.Tensor]]):
             raise ValueError(f"no windows found for split: {split}")
         self.state_mean = torch.tensor(normalization["state_mean"], dtype=torch.float32)
         self.state_std = torch.tensor(normalization["state_std"], dtype=torch.float32)
+        self.normalized_state_clip = normalized_state_clip
         transforms: list[Any] = [v2.Resize((image_size, image_size), antialias=True)]
         if augment:
             # Geometry is intentionally unchanged: flips alter left/right driving semantics.
@@ -64,6 +68,13 @@ class SingleFrameWindowDataset(Dataset[dict[str, torch.Tensor]]):
             image = self.image_transform(image_file.convert("RGB"))
         state = torch.tensor(row["state_history"][-1], dtype=torch.float32)
         normalized_state = (state - self.state_mean) / self.state_std
+        if not bool(torch.all(torch.isfinite(normalized_state))):
+            raise ValueError(f"non-finite normalized state at dataset index {index}")
+        normalized_state = torch.clamp(
+            normalized_state,
+            min=-self.normalized_state_clip,
+            max=self.normalized_state_clip,
+        )
         condition = torch.tensor(row["condition"], dtype=torch.float32)
         return {
             "image": image,

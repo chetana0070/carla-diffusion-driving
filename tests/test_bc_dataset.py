@@ -33,7 +33,12 @@ class BCDatasetTests(unittest.TestCase):
                 json.dumps({"source_dataset": str(raw)}), encoding="utf-8"
             )
             (processed / "normalization.json").write_text(
-                json.dumps({"state_mean": [1.0] * 10, "state_std": [2.0] * 10}),
+                json.dumps(
+                    {
+                        "state_mean": [1.0] * 10,
+                        "state_std": [1e-6] + [2.0] * 9,
+                    }
+                ),
                 encoding="utf-8",
             )
             row = {
@@ -51,7 +56,8 @@ class BCDatasetTests(unittest.TestCase):
             item = dataset[0]
             self.assertEqual(tuple(item["image"].shape), (3, 224, 224))
             self.assertEqual(tuple(item["scalar_context"].shape), (19,))
-            self.assertTrue(bool(torch.allclose(item["scalar_context"][:10], torch.ones(10))))
+            self.assertEqual(float(item["scalar_context"][0]), 10.0)
+            self.assertTrue(bool(torch.allclose(item["scalar_context"][1:10], torch.ones(9))))
             self.assertEqual(tuple(item["target"].shape), (2,))
             self.assertAlmostEqual(float(item["weight"]), 1.5)
 

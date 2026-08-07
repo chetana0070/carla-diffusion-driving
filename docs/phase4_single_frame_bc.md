@@ -17,6 +17,12 @@ steering and longitudinal action.
 - Horizontal flips are prohibited because they invalidate route and steering
   semantics.
 - Outputs are bounded to `[-1, 1]` with `tanh`.
+- Normalized state features are bounded to `[-10, 10]` to prevent a near-zero
+  training standard deviation from destabilizing a held-out route.
+- Validation and test inference run in FP32; training retains CUDA mixed
+  precision for throughput.
+- Non-finite loss, prediction, target, or validation metrics stop immediately
+  with an explicit numerical-stability error.
 - This model intentionally ignores the previous three images and remaining 15
   expert actions. Temporal BC and diffusion must beat this baseline fairly.
 

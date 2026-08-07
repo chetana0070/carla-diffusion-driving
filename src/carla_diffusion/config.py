@@ -108,6 +108,10 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         0 < behavioral_cloning["learning_rate"] < 1,
         "BC learning rate must be in (0, 1)",
     )
+    _require(
+        behavioral_cloning["normalized_state_clip"] > 0,
+        "normalized-state clip must be positive",
+    )
 
     split_sets = [
         set(dataset["train_towns"]),

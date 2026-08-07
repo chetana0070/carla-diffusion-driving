@@ -206,3 +206,39 @@ PHASE5_REPORT=artifacts/evaluations/phase5_closed_loop_smoke_v081.json \
 The temporal runtime repeats the first synchronized observation to initialize
 its four-frame buffer, then rolls forward one frame per control tick. The buffer
 is reset between episodes to prevent route leakage.
+
+## Phase 5.2 failure diagnosis
+
+Before collecting corrective demonstrations, rerun the frozen temporal policy
+with telemetry/no-progress detection, then validate the same routes with CARLA
+Traffic Manager under the identical seeds and traffic load:
+
+```bash
+CARLA_RENDER_MODE=offscreen \
+PHASE5_EPISODES=3 \
+PHASE5_TICKS_PER_EPISODE=600 \
+PHASE5_BACKGROUND_VEHICLES=8 \
+PHASE5_REPORT=artifacts/evaluations/phase5_policy_diagnostic_v090.json \
+PHASE5_TELEMETRY_DIR=artifacts/evaluations/phase5_policy_telemetry_v090 \
+./scripts/run_phase5_closed_loop.sh
+```
+
+Then smoke-test the expert oracle:
+
+```bash
+CARLA_RENDER_MODE=live \
+PHASE5_EPISODES=1 \
+PHASE5_TICKS_PER_EPISODE=300 \
+PHASE5_BACKGROUND_VEHICLES=2 \
+PHASE5_EXPERT_REPORT=artifacts/evaluations/phase5_expert_smoke_v090.json \
+PHASE5_EXPERT_TELEMETRY_DIR=artifacts/evaluations/phase5_expert_smoke_telemetry_v090 \
+./scripts/run_phase5_expert_oracle.sh
+```
+
+Every episode writes compact tick-level JSONL telemetry. Runs terminate as
+`no_progress` when they travel less than two meters across 100 ticks. After the
+three-seed expert run, `scripts/summarize_phase5_diagnostics.py` verifies the
+map/seed contract and decides whether the route harness or learned policy is the
+primary blocker. The expert capability gate is versioned and combines route
+progress, physical distance, safety, and liveness so legal signal stops cannot
+dominate a single progress threshold. See `docs/phase5_2_failure_diagnosis.md`.

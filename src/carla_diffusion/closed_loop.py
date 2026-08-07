@@ -3,8 +3,31 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections import deque
+from collections.abc import Mapping, Sequence
 from typing import Any
+
+
+class NoProgressMonitor:
+    """Detect sustained lack of traveled distance without reacting to brief stops."""
+
+    def __init__(self, window_ticks: int, minimum_distance_m: float) -> None:
+        if window_ticks < 2 or not math.isfinite(minimum_distance_m) or minimum_distance_m <= 0:
+            raise ValueError("invalid no-progress monitor contract")
+        self.window_ticks = window_ticks
+        self.minimum_distance_m = minimum_distance_m
+        self._distances: deque[float] = deque(maxlen=window_ticks)
+
+    def reset(self) -> None:
+        self._distances.clear()
+
+    def update(self, cumulative_distance_m: float) -> bool:
+        if not math.isfinite(cumulative_distance_m) or cumulative_distance_m < 0:
+            raise ValueError("cumulative distance must be finite and non-negative")
+        self._distances.append(cumulative_distance_m)
+        if len(self._distances) < self.window_ticks:
+            return False
+        return self._distances[-1] - self._distances[0] < self.minimum_distance_m
 
 
 def route_command_from_geometry(
@@ -81,4 +104,57 @@ def aggregate_episode_reports(episodes: Sequence[dict[str, Any]]) -> dict[str, A
         "mean_abs_longitudinal_rate_per_second": mean(
             [float(episode["mean_abs_longitudinal_rate_per_second"]) for episode in episodes]
         ),
+    }
+
+
+def evaluate_expert_oracle_gate(
+    aggregate: Mapping[str, Any],
+    termination_counts: Mapping[str, int],
+    contract: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Evaluate the versioned Phase 5 harness-capability gate."""
+    checks = {
+        "route_progress_gate_passed": (
+            float(aggregate["mean_route_progress_fraction"])
+            >= float(contract["expert_oracle_min_route_progress_fraction"])
+        ),
+        "distance_gate_passed": (
+            float(aggregate["mean_distance_traveled_m"])
+            >= float(contract["expert_oracle_min_mean_distance_m"])
+        ),
+        "collision_gate_passed": (
+            int(aggregate["total_collisions"])
+            <= int(contract["expert_oracle_max_collisions"])
+        ),
+        "lane_invasion_gate_passed": (
+            int(aggregate["total_lane_invasions"])
+            <= int(contract["expert_oracle_max_lane_invasions"])
+        ),
+        "red_light_gate_passed": (
+            int(aggregate["total_red_light_violations"])
+            <= int(contract["expert_oracle_max_red_light_violations"])
+        ),
+        "no_progress_gate_passed": (
+            int(termination_counts.get("no_progress", 0))
+            <= int(contract["expert_oracle_max_no_progress_terminations"])
+        ),
+    }
+    return {
+        "protocol_version": str(contract["expert_oracle_protocol_version"]),
+        "passed": all(checks.values()),
+        "thresholds": {
+            "minimum_mean_route_progress_fraction": contract[
+                "expert_oracle_min_route_progress_fraction"
+            ],
+            "minimum_mean_distance_m": contract["expert_oracle_min_mean_distance_m"],
+            "maximum_collisions": contract["expert_oracle_max_collisions"],
+            "maximum_lane_invasions": contract["expert_oracle_max_lane_invasions"],
+            "maximum_red_light_violations": contract[
+                "expert_oracle_max_red_light_violations"
+            ],
+            "maximum_no_progress_terminations": contract[
+                "expert_oracle_max_no_progress_terminations"
+            ],
+        },
+        **checks,
     }

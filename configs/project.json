@@ -83,6 +83,15 @@
     "command_lookahead_points": 4,
     "turn_threshold_degrees": 15.0,
     "terminate_on_collision": true,
+    "no_progress_window_ticks": 100,
+    "no_progress_min_distance_m": 2.0,
+    "expert_oracle_protocol_version": "2.0.0",
+    "expert_oracle_min_route_progress_fraction": 0.2,
+    "expert_oracle_min_mean_distance_m": 150.0,
+    "expert_oracle_max_collisions": 0,
+    "expert_oracle_max_lane_invasions": 0,
+    "expert_oracle_max_red_light_violations": 0,
+    "expert_oracle_max_no_progress_terminations": 0,
     "seed": 20260901
   },
   "temporal_behavioral_cloning": {

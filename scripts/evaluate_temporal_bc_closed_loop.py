@@ -35,6 +35,7 @@ class TemporalPolicyRuntime:
         temporal = self.config["temporal_behavioral_cloning"]
         self.history_frames = int(temporal["history_frames"])
         self.model_type = "temporal_bc"
+        self.uses_external_control = False
         self.model = TemporalBC(
             history_frames=self.history_frames,
             state_dimension=int(temporal["state_input_dimension"]),
@@ -96,6 +97,15 @@ class TemporalPolicyRuntime:
 
     def reset_episode(self) -> None:
         self.history.reset()
+
+    def start_episode(
+        self,
+        vehicle: Any,
+        traffic_manager: Any,
+        route: list[Any],
+        traffic_manager_port: int,
+    ) -> None:
+        del vehicle, traffic_manager, route, traffic_manager_port
 
     @torch.inference_mode()
     def predict(

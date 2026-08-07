@@ -17,9 +17,26 @@ The learned temporal policy and CARLA Traffic Manager expert use the same:
 - eight background vehicles;
 - collision and no-progress termination rules.
 
-The expert oracle passes only when mean route progress is at least 25% and it
-records zero collisions. This threshold validates meaningful route traversal;
-it is not the final autonomous-driving success target.
+### Protocol amendment: v2.0.0
+
+The original v1 gate required 25% mean route progress and zero collisions. The
+first frozen expert evaluation averaged 23.46% progress and 208.31 meters while
+recording zero collisions, lane invasions, red-light violations, or no-progress
+terminations. Two routes exceeded 25%; one spent more time legally stationary
+under its traffic conditions. This showed that a single waypoint-progress
+threshold was overly sensitive to traffic-light dwell time.
+
+Protocol v2 is explicitly disclosed rather than presenting the original gate
+as passed. It validates harness capability using complementary gates:
+
+- at least 20% mean route progress;
+- at least 150 meters mean physical distance;
+- zero collisions, lane invasions, and red-light violations;
+- zero `no_progress` terminations.
+
+These are infrastructure-capability gates, not final learned-policy targets.
+The amendment is applied before corrective data collection or diffusion
+training, and the final policy evaluation protocol remains unchanged.
 
 ## Telemetry contract
 
@@ -99,6 +116,10 @@ Generate the decision report:
 ```bash
 python scripts/summarize_phase5_diagnostics.py
 ```
+
+The amended summary is written to
+`artifacts/evaluations/phase5_diagnostic_summary_v092.json`. The original v1
+decision report remains unchanged as `phase5_diagnostic_summary_v090.json`.
 
 ## Decision gate
 

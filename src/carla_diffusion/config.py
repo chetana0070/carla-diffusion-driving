@@ -128,6 +128,42 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "route-command lookahead must be positive",
     )
     _require(
+        closed_loop["no_progress_window_ticks"] >= simulator["control_hz"],
+        "no-progress window must span at least one second",
+    )
+    _require(
+        closed_loop["no_progress_min_distance_m"] > 0,
+        "no-progress distance must be positive",
+    )
+    _require(
+        0 < closed_loop["expert_oracle_min_route_progress_fraction"] <= 1,
+        "expert-oracle route progress must be in (0, 1]",
+    )
+    _require(
+        closed_loop["expert_oracle_protocol_version"] == "2.0.0",
+        "unsupported expert-oracle protocol version",
+    )
+    _require(
+        closed_loop["expert_oracle_min_mean_distance_m"] > 0,
+        "expert-oracle mean distance must be positive",
+    )
+    _require(
+        closed_loop["expert_oracle_max_collisions"] >= 0,
+        "expert-oracle collision allowance must be non-negative",
+    )
+    _require(
+        closed_loop["expert_oracle_max_lane_invasions"] >= 0,
+        "expert-oracle lane-invasion allowance must be non-negative",
+    )
+    _require(
+        closed_loop["expert_oracle_max_red_light_violations"] >= 0,
+        "expert-oracle red-light allowance must be non-negative",
+    )
+    _require(
+        closed_loop["expert_oracle_max_no_progress_terminations"] >= 0,
+        "expert-oracle no-progress allowance must be non-negative",
+    )
+    _require(
         temporal_bc["history_frames"] == camera["history_frames"],
         "temporal BC history must match the observation contract",
     )

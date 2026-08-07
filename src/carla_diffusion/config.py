@@ -27,6 +27,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "camera",
         "policy",
         "dataset",
+        "preprocessing",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -36,6 +37,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     camera = config["camera"]
     policy = config["policy"]
     dataset = config["dataset"]
+    preprocessing = config["preprocessing"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -59,6 +61,20 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         dataset["stop_collection_free_disk_gib"] < dataset["minimum_free_disk_gib"],
         "collection stop threshold must be below start threshold",
     )
+    _require(preprocessing["raw_state_dimension"] == 8, "raw state dimension must be 8")
+    _require(
+        preprocessing["model_state_dimension"] == 10,
+        "model state must add lead/light availability masks",
+    )
+    _require(
+        preprocessing["categorical_condition_dimension"] == 9,
+        "condition must encode four route commands and five traffic-light states",
+    )
+    _require(preprocessing["acceleration_clip_mps2"] > 0, "acceleration clip must be positive")
+    _require(
+        0 < preprocessing["stationary_hold_weight"] <= 1,
+        "stationary hold weight must be in (0, 1]",
+    )
 
     split_sets = [
         set(dataset["train_towns"]),
@@ -77,4 +93,3 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "latency budget exceeds the control period",
     )
     return config
-

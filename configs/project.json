@@ -43,6 +43,18 @@
     "validation_towns": ["Town02"],
     "test_towns": ["Town05", "Town10HD"]
   },
+  "preprocessing": {
+    "raw_state_dimension": 8,
+    "model_state_dimension": 10,
+    "categorical_condition_dimension": 9,
+    "acceleration_clip_mps2": 12.0,
+    "stationary_hold_weight": 0.25,
+    "turning_weight": 2.0,
+    "active_braking_weight": 2.0,
+    "lead_context_weight": 1.5,
+    "pilot_validation_routes": 1,
+    "pilot_test_routes": 1
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,
@@ -52,4 +64,3 @@
     "max_policy_latency_ms": 100
   }
 }
-

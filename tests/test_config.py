@@ -12,6 +12,7 @@ class ConfigTests(unittest.TestCase):
     def test_project_config_is_valid(self) -> None:
         config = load_and_validate_config(ROOT / "configs" / "project.json")
         self.assertEqual(config["policy"]["action_dimension"], 2)
+        self.assertEqual(config["preprocessing"]["model_state_dimension"], 10)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

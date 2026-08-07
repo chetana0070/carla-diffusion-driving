@@ -21,6 +21,11 @@ is used while collection is active. The directory is renamed into place only
 after all rows and images have been flushed successfully. Failed episodes stay
 hidden with a failure report and are never treated as training data.
 
+Collection is idempotent. If the requested root already contains the exact
+number of valid episodes and samples, the runner validates and reuses it rather
+than recollecting or overwriting it. A partially populated or
+cardinality-mismatched root is rejected and requires a different dataset root.
+
 ## Safety and storage controls
 
 - Collection cannot start below 100 GiB free.
@@ -81,5 +86,5 @@ Phase 2 passes only when:
 7. no staging or failed directory is admitted to the manifest;
 8. at least 80 GiB remains free.
 
-Passing the pilot authorizes dataset balancing and expanded expert collection;
-it does not yet authorize behavioral-cloning training.
+Passing the structural and semantic pilot gates authorizes Phase 3 temporal
+window preparation. It does not directly authorize behavioral-cloning training.

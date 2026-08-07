@@ -18,7 +18,9 @@ Phase 0 freezes the experimental contract before simulator installation:
 Phase 0 passed on the target laptop. Phase 1 installed the pinned packaged
 server and passed a deterministic 1,000-tick RGB synchronization test. Phase 2
 adds atomic expert-episode collection, storage gates, and full dataset
-validation. No model is trained in these infrastructure phases.
+validation. Phase 3 converts the accepted pilot into leakage-resistant temporal
+windows and training-only normalization statistics. No model is trained in
+these infrastructure phases.
 
 ## Research question
 
@@ -117,3 +119,17 @@ The audit measures temporal-window yield, control and state coverage, route
 commands, traffic context, safety events, JPEG integrity, and per-episode
 balance. It produces JSON, Markdown, CSV, and a labeled contact sheet under
 `artifacts/evaluations/`.
+
+## Phase 3 data preparation
+
+```bash
+python scripts/prepare_phase3_data.py \
+    data/raw/phase2_pilot_v2_v043 \
+    --output-root data/processed/phase3_pilot_v1
+```
+
+The preparation stage creates 4-frame/16-action windows, an 8/1/1 pilot
+route split, training-only normalization statistics, explicit lead/light
+availability masks, acceleration clipping metadata, and sampling weights for
+rare maneuvers and redundant stationary brake holds. Raw Phase 2 files are
+never modified.

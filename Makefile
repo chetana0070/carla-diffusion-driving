@@ -1,4 +1,4 @@
-.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop
+.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train
 
 test:
 	python -m unittest discover -s tests -v
@@ -32,3 +32,12 @@ phase4-train:
 
 phase4-closed-loop:
 	./scripts/run_phase4_closed_loop.sh
+
+phase5-model-smoke:
+	python scripts/smoke_phase5_temporal_model.py
+
+phase5-train-smoke:
+	python scripts/train_temporal_bc.py --smoke --output-dir artifacts/checkpoints/phase5_temporal_smoke
+
+phase5-train:
+	python scripts/train_temporal_bc.py --pretrained

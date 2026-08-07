@@ -18,6 +18,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["behavioral_cloning"]["normalized_state_clip"], 10.0)
         self.assertEqual(config["closed_loop_evaluation"]["episodes"], 3)
         self.assertEqual(config["closed_loop_evaluation"]["seed"], 20260901)
+        self.assertEqual(config["temporal_behavioral_cloning"]["history_frames"], 4)
+        self.assertEqual(config["temporal_behavioral_cloning"]["batch_size"], 8)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

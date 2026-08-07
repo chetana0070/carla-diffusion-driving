@@ -172,3 +172,19 @@ PHASE4_REPORT=artifacts/evaluations/phase4_closed_loop_smoke.json \
 
 The ego vehicle is controlled only by the learned policy. The evaluator records
 route progress, safety events, control smoothness, and end-to-end policy latency.
+
+## Phase 5 temporal BC
+
+The next ablation replaces the single current frame with four image/state
+observations while retaining a single current-action target:
+
+```bash
+python scripts/smoke_phase5_temporal_model.py
+python scripts/train_temporal_bc.py \
+    --smoke \
+    --output-dir artifacts/checkpoints/phase5_temporal_smoke_v080
+```
+
+The shared EfficientNet-B0 and GRU model uses the same Phase 3 windows, weights,
+route split, metric definitions, and checkpoint-selection rule as single-frame
+BC. This isolates temporal context before action-chunk diffusion is introduced.

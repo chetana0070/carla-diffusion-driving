@@ -30,6 +30,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "preprocessing",
         "behavioral_cloning",
         "closed_loop_evaluation",
+        "temporal_behavioral_cloning",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -42,6 +43,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     preprocessing = config["preprocessing"]
     behavioral_cloning = config["behavioral_cloning"]
     closed_loop = config["closed_loop_evaluation"]
+    temporal_bc = config["temporal_behavioral_cloning"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -124,6 +126,41 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         closed_loop["command_lookahead_points"] > 0,
         "route-command lookahead must be positive",
+    )
+    _require(
+        temporal_bc["history_frames"] == camera["history_frames"],
+        "temporal BC history must match the observation contract",
+    )
+    _require(
+        temporal_bc["image_encoder"] == policy["visual_encoder"],
+        "temporal BC and policy encoders must match",
+    )
+    _require(
+        temporal_bc["state_input_dimension"] == preprocessing["model_state_dimension"],
+        "temporal BC state dimension must match preprocessing",
+    )
+    _require(
+        temporal_bc["condition_input_dimension"]
+        == preprocessing["categorical_condition_dimension"],
+        "temporal BC condition dimension must match preprocessing",
+    )
+    _require(
+        temporal_bc["output_dimension"] == policy["action_dimension"],
+        "temporal BC output must match the action dimension",
+    )
+    _require(
+        temporal_bc["image_size"] == camera["model_width"] == camera["model_height"],
+        "temporal BC image size must match the square model input",
+    )
+    _require(temporal_bc["batch_size"] > 0, "temporal BC batch size must be positive")
+    _require(temporal_bc["epochs"] > 0, "temporal BC epochs must be positive")
+    _require(
+        temporal_bc["freeze_encoder_epochs"] < temporal_bc["epochs"],
+        "temporal encoder freeze period must be shorter than training",
+    )
+    _require(
+        temporal_bc["normalized_state_clip"] > 0,
+        "temporal normalized-state clip must be positive",
     )
 
     split_sets = [

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -43,7 +44,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--learning-rate", type=float)
+    parser.add_argument("--freeze-encoder-epochs", type=int)
+    parser.add_argument(
+        "--corrective-validation-split",
+        choices=("correction_validation",),
+    )
+    parser.add_argument(
+        "--max-nominal-validation-degradation-fraction",
+        type=float,
+        default=0.05,
+    )
     parser.add_argument("--pretrained", action="store_true")
+    parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument("--allow-cpu", action="store_true")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--max-train-batches", type=int)
@@ -211,6 +223,17 @@ def main() -> int:
     args = parse_args()
     config = load_and_validate_config(PROJECT_ROOT / "configs" / "project.json")
     temporal_config = config["temporal_behavioral_cloning"]
+    if args.pretrained and args.initial_checkpoint is not None:
+        raise ValueError("--pretrained and --initial-checkpoint are mutually exclusive")
+    if (
+        args.corrective_validation_split is not None
+        and args.initial_checkpoint is None
+    ):
+        raise ValueError("corrective checkpoint selection requires --initial-checkpoint")
+    if args.max_nominal_validation_degradation_fraction < 0:
+        raise ValueError("nominal validation degradation fraction cannot be negative")
+    if args.freeze_encoder_epochs is not None and args.freeze_encoder_epochs < 0:
+        raise ValueError("freeze encoder epochs cannot be negative")
     seed = int(config["project"]["random_seed"])
     seed_everything(seed)
     if not torch.cuda.is_available() and not args.allow_cpu:
@@ -243,6 +266,12 @@ def main() -> int:
         "validation": TemporalWindowDataset(processed_root, "validation", **dataset_options),
         "test": TemporalWindowDataset(processed_root, "test", **dataset_options),
     }
+    if args.corrective_validation_split is not None:
+        datasets["correction_validation"] = TemporalWindowDataset(
+            processed_root,
+            args.corrective_validation_split,
+            **dataset_options,
+        )
     loaders = {
         name: make_loader(
             dataset,
@@ -255,9 +284,30 @@ def main() -> int:
         for name, dataset in datasets.items()
     }
     model = build_model(
-        temporal_config, pretrained=args.pretrained and not args.smoke
+        temporal_config,
+        pretrained=args.pretrained and not args.smoke and args.initial_checkpoint is None,
     ).to(device)
-    freeze_epochs = 0 if args.smoke else int(temporal_config["freeze_encoder_epochs"])
+    initial_checkpoint_path: Path | None = None
+    initial_checkpoint_sha256: str | None = None
+    initial_checkpoint_epoch: int | None = None
+    if args.initial_checkpoint is not None:
+        initial_checkpoint_path = args.initial_checkpoint.resolve()
+        initial_checkpoint = torch.load(
+            initial_checkpoint_path, map_location=device, weights_only=False
+        )
+        if initial_checkpoint.get("model_type") != "temporal_bc":
+            raise ValueError("initial checkpoint is not a temporal BC checkpoint")
+        model.load_state_dict(initial_checkpoint["model_state_dict"])
+        initial_checkpoint_epoch = int(initial_checkpoint["epoch"])
+        initial_checkpoint_sha256 = hashlib.sha256(
+            initial_checkpoint_path.read_bytes()
+        ).hexdigest()
+    if args.freeze_encoder_epochs is not None:
+        freeze_epochs = args.freeze_encoder_epochs
+    elif args.smoke or initial_checkpoint_path is not None:
+        freeze_epochs = 0
+    else:
+        freeze_epochs = int(temporal_config["freeze_encoder_epochs"])
     model.set_encoder_trainable(freeze_epochs == 0)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -271,6 +321,58 @@ def main() -> int:
     history: list[dict[str, Any]] = []
     checkpoint_path = output_dir / "best.pt"
     started = time.perf_counter()
+    initial_validation: dict[str, Any] | None = None
+    initial_corrective_validation: dict[str, Any] | None = None
+    current_corrective_validation: dict[str, Any] | None = None
+    best_corrective_validation = float("inf")
+
+    def save_checkpoint(epoch: int, validation: dict[str, Any]) -> None:
+        temporary = checkpoint_path.with_suffix(".pt.tmp")
+        torch.save(
+            {
+                "model_type": "temporal_bc",
+                "model_state_dict": model.state_dict(),
+                "epoch": epoch,
+                "config": config,
+                "pretrained": args.pretrained and not args.smoke,
+                "initial_checkpoint": (
+                    str(initial_checkpoint_path) if initial_checkpoint_path else None
+                ),
+                "initial_checkpoint_sha256": initial_checkpoint_sha256,
+                "initial_checkpoint_epoch": initial_checkpoint_epoch,
+                "validation": validation,
+                "corrective_validation": current_corrective_validation,
+            },
+            temporary,
+        )
+        os.replace(temporary, checkpoint_path)
+
+    if initial_checkpoint_path is not None:
+        initial_validation = evaluate(
+            model,
+            loaders["validation"],
+            device,
+            steering_tolerance=float(temporal_config["steering_tolerance"]),
+            longitudinal_tolerance=float(temporal_config["longitudinal_tolerance"]),
+            max_batches=max_eval_batches,
+        )
+        best_validation = float(initial_validation["joint_rmse"])
+        if not math.isfinite(best_validation):
+            raise FloatingPointError("non-finite initial-checkpoint validation RMSE")
+        if "correction_validation" in loaders:
+            initial_corrective_validation = evaluate(
+                model,
+                loaders["correction_validation"],
+                device,
+                steering_tolerance=float(temporal_config["steering_tolerance"]),
+                longitudinal_tolerance=float(temporal_config["longitudinal_tolerance"]),
+                max_batches=max_eval_batches,
+            )
+            best_corrective_validation = float(
+                initial_corrective_validation["joint_rmse"]
+            )
+        current_corrective_validation = initial_corrective_validation
+        save_checkpoint(0, initial_validation)
 
     for epoch in range(1, epochs + 1):
         if epoch == freeze_epochs + 1 and freeze_epochs > 0:
@@ -286,29 +388,50 @@ def main() -> int:
             longitudinal_tolerance=float(temporal_config["longitudinal_tolerance"]),
             max_batches=max_eval_batches,
         )
-        record = {"epoch": epoch, "training_weighted_mse": training_loss, **validation}
+        corrective_validation = None
+        if "correction_validation" in loaders:
+            corrective_validation = evaluate(
+                model,
+                loaders["correction_validation"],
+                device,
+                steering_tolerance=float(temporal_config["steering_tolerance"]),
+                longitudinal_tolerance=float(temporal_config["longitudinal_tolerance"]),
+                max_batches=max_eval_batches,
+            )
+        record = {
+            "epoch": epoch,
+            "training_weighted_mse": training_loss,
+            **validation,
+            "corrective_validation": corrective_validation,
+        }
         history.append(record)
         print(json.dumps(record), flush=True)
         joint_rmse = float(validation["joint_rmse"])
         if not math.isfinite(joint_rmse):
             raise FloatingPointError(f"non-finite temporal validation RMSE at epoch {epoch}")
-        if joint_rmse < best_validation:
+        if corrective_validation is None:
+            improved = joint_rmse < best_validation
+        else:
+            if initial_validation is None:
+                raise RuntimeError("corrective selection requires an initial checkpoint")
+            nominal_limit = float(initial_validation["joint_rmse"]) * (
+                1.0 + args.max_nominal_validation_degradation_fraction
+            )
+            corrective_rmse = float(corrective_validation["joint_rmse"])
+            improved = (
+                joint_rmse <= nominal_limit
+                and corrective_rmse < best_corrective_validation
+            )
+        if improved:
             best_validation = joint_rmse
+            if corrective_validation is not None:
+                best_corrective_validation = float(
+                    corrective_validation["joint_rmse"]
+                )
             best_epoch = epoch
             epochs_without_improvement = 0
-            temporary = checkpoint_path.with_suffix(".pt.tmp")
-            torch.save(
-                {
-                    "model_type": "temporal_bc",
-                    "model_state_dict": model.state_dict(),
-                    "epoch": epoch,
-                    "config": config,
-                    "pretrained": args.pretrained and not args.smoke,
-                    "validation": validation,
-                },
-                temporary,
-            )
-            os.replace(temporary, checkpoint_path)
+            current_corrective_validation = corrective_validation
+            save_checkpoint(epoch, validation)
         else:
             epochs_without_improvement += 1
             if epochs_without_improvement >= int(
@@ -338,10 +461,33 @@ def main() -> int:
         "gpu": torch.cuda.get_device_name(0) if device.type == "cuda" else None,
         "torch_version": torch.__version__,
         "pretrained": args.pretrained and not args.smoke,
+        "initial_checkpoint": (
+            str(initial_checkpoint_path) if initial_checkpoint_path else None
+        ),
+        "initial_checkpoint_sha256": initial_checkpoint_sha256,
+        "initial_checkpoint_epoch": initial_checkpoint_epoch,
+        "initial_validation_metrics": initial_validation,
+        "initial_corrective_validation_metrics": initial_corrective_validation,
+        "training_hyperparameters": {
+            "epochs_requested": epochs,
+            "batch_size": batch_size,
+            "learning_rate": learning_rate,
+            "weight_decay": float(temporal_config["weight_decay"]),
+            "encoder_freeze_epochs": freeze_epochs,
+            "corrective_validation_split": args.corrective_validation_split,
+            "max_nominal_validation_degradation_fraction": (
+                args.max_nominal_validation_degradation_fraction
+            ),
+        },
         "dataset_sizes": {name: len(dataset) for name, dataset in datasets.items()},
         "best_epoch": best_epoch,
         "validation_selection_metric": "joint_rmse",
         "best_validation_joint_rmse": best_validation,
+        "best_corrective_validation_joint_rmse": (
+            best_corrective_validation
+            if math.isfinite(best_corrective_validation)
+            else None
+        ),
         "test_metrics": test_metrics,
         "epochs": history,
         "elapsed_wall_seconds": round(time.perf_counter() - started, 3),

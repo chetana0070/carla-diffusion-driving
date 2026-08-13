@@ -24,8 +24,9 @@ class TemporalWindowDataset(Dataset[dict[str, torch.Tensor]]):
         image_size: int = 224,
         augment: bool = False,
         normalized_state_clip: float = 10.0,
+        required_category: str | None = None,
     ) -> None:
-        if split not in {"train", "validation", "test"}:
+        if split not in {"train", "validation", "test", "correction_validation"}:
             raise ValueError(f"invalid split: {split}")
         if history_frames <= 1 or image_size <= 0 or normalized_state_clip <= 0:
             raise ValueError("invalid temporal dataset dimensions")
@@ -38,6 +39,12 @@ class TemporalWindowDataset(Dataset[dict[str, torch.Tensor]]):
             for line in (root / "windows.jsonl").read_text(encoding="utf-8").splitlines()
         ]
         self.rows = [row for row in all_rows if row["split"] == split]
+        if required_category is not None:
+            self.rows = [
+                row
+                for row in self.rows
+                if required_category in row.get("categories", [])
+            ]
         if not self.rows:
             raise ValueError(f"no windows found for split: {split}")
         if any(len(row["image_paths"]) != history_frames for row in self.rows):
@@ -59,8 +66,9 @@ class TemporalWindowDataset(Dataset[dict[str, torch.Tensor]]):
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         row = self.rows[index]
         frames = []
+        source_root = Path(str(row.get("source_dataset", self.dataset_root))).resolve()
         for relative_path in row["image_paths"]:
-            with Image.open(self.dataset_root / str(relative_path)) as image_file:
+            with Image.open(source_root / str(relative_path)) as image_file:
                 frames.append(self.to_float(image_file.convert("RGB")))
         images = self.sequence_transform(torch.stack(frames))
         state_history = torch.tensor(row["state_history"], dtype=torch.float32)
@@ -75,6 +83,7 @@ class TemporalWindowDataset(Dataset[dict[str, torch.Tensor]]):
         return {
             "images": images,
             "state_history": normalized_states,
+            "raw_state_history": state_history,
             "condition": torch.tensor(row["condition"], dtype=torch.float32),
             "target": torch.tensor(row["action_target"][0], dtype=torch.float32),
             "weight": torch.tensor(float(row["sample_weight"]), dtype=torch.float32),

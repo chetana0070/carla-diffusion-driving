@@ -34,9 +34,13 @@ class PreparedWindow:
     action_target: tuple[tuple[float, float], ...]
     sample_weight: float
     categories: tuple[str, ...]
+    source_dataset: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        if self.source_dataset is None:
+            payload.pop("source_dataset")
+        return payload
 
 
 def transform_state(state: Sequence[float], acceleration_clip: float) -> tuple[float, ...]:
@@ -105,6 +109,7 @@ def build_temporal_windows(
     horizon: int,
     acceleration_clip: float,
     weight_config: WeightConfig,
+    source_dataset: str | None = None,
 ) -> list[PreparedWindow]:
     if history < 1 or horizon < 1:
         raise ValueError("history and horizon must be positive")
@@ -142,6 +147,7 @@ def build_temporal_windows(
                 action_target=tuple(sample.expert_action for sample in action_slice),
                 sample_weight=weight,
                 categories=categories,
+                source_dataset=source_dataset,
             )
         )
     return windows

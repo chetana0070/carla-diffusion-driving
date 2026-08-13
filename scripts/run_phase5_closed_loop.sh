@@ -15,6 +15,7 @@ CONTROLLER="${PHASE5_CONTROLLER:-policy}"
 TELEMETRY_DIR="${PHASE5_TELEMETRY_DIR:-artifacts/evaluations/phase5_telemetry}"
 SAVE_VIDEO="${PHASE5_SAVE_VIDEO:-0}"
 VIDEO_DIR="${PHASE5_VIDEO_DIR:-artifacts/evaluations/phase5_videos}"
+EVALUATOR="${PHASE5_EVALUATOR:-scripts/evaluate_temporal_bc_closed_loop.py}"
 SERVER_PID=""
 CLIENT_ARGS=()
 
@@ -142,7 +143,7 @@ else:
 PY
 
 cd "$PROJECT_ROOT"
-python scripts/evaluate_temporal_bc_closed_loop.py \
+python "$EVALUATOR" \
     --checkpoint "$CHECKPOINT" \
     --report "$REPORT" \
     --episodes "$EPISODES" \

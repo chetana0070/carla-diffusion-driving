@@ -66,6 +66,9 @@ class TemporalPolicyRuntime:
         self.history: TemporalHistoryBuffer[torch.Tensor, torch.Tensor] = (
             TemporalHistoryBuffer(self.history_frames)
         )
+        self.last_state_history: torch.Tensor | None = None
+        self.last_condition: torch.Tensor | None = None
+        self.last_base_action: torch.Tensor | None = None
         self.warmup_iterations = 20
         image_size = int(temporal["image_size"])
         dummy_images = torch.zeros(
@@ -97,6 +100,10 @@ class TemporalPolicyRuntime:
 
     def reset_episode(self) -> None:
         self.history.reset()
+        self.last_diagnostics: dict[str, Any] = {}
+
+    def diagnostics(self) -> dict[str, Any]:
+        return dict(self.last_diagnostics)
 
     def start_episode(
         self,
@@ -139,11 +146,18 @@ class TemporalPolicyRuntime:
             device=self.device,
         ).unsqueeze(0)
         prediction = self.model(images, states, condition)
+        self.last_state_history = states
+        self.last_condition = condition
+        self.last_base_action = prediction
         torch.cuda.synchronize()
         latency_ms = (time.perf_counter() - started) * 1000.0
         if not bool(torch.all(torch.isfinite(prediction))):
             raise FloatingPointError("policy produced a non-finite closed-loop action")
         steering, longitudinal = prediction[0].detach().cpu().tolist()
+        self.last_diagnostics = {
+            "base_steering": float(steering),
+            "base_longitudinal": float(longitudinal),
+        }
         return float(steering), float(longitudinal), latency_ms
 
 

@@ -217,6 +217,7 @@ class PolicyRuntime:
         self.model_type = "single_frame_bc"
         self.history_frames = 1
         self.uses_external_control = False
+        self.last_diagnostics: dict[str, Any] = {}
         dummy_image = Image.new(
             "RGB",
             (
@@ -238,6 +239,10 @@ class PolicyRuntime:
 
     def reset_episode(self) -> None:
         """Reset stateful policy context before a new route."""
+        self.last_diagnostics = {}
+
+    def diagnostics(self) -> dict[str, Any]:
+        return dict(self.last_diagnostics)
 
     def start_episode(
         self,
@@ -378,6 +383,10 @@ def evaluate_episode(
     terminated_reason = "tick_limit"
     ticks_completed = 0
     telemetry_rows: list[dict[str, Any]] = []
+    recovery_active_ticks = 0
+    recovery_activation_events = 0
+    maximum_abs_residual_steering = 0.0
+    maximum_abs_residual_longitudinal = 0.0
     telemetry_path: Path | None = None
     video_path: Path | None = None
     video_writer: EpisodeVideoWriter | None = None
@@ -498,6 +507,24 @@ def evaluate_episode(
                         steer=max(-1.0, min(1.0, steering)),
                     )
                 )
+            diagnostics_method = getattr(policy, "diagnostics", None)
+            policy_diagnostics = (
+                diagnostics_method() if callable(diagnostics_method) else {}
+            )
+            recovery_active_ticks += int(
+                bool(policy_diagnostics.get("recovery_active", False))
+            )
+            recovery_activation_events += int(
+                bool(policy_diagnostics.get("recovery_activated", False))
+            )
+            maximum_abs_residual_steering = max(
+                maximum_abs_residual_steering,
+                abs(float(policy_diagnostics.get("residual_steering", 0.0))),
+            )
+            maximum_abs_residual_longitudinal = max(
+                maximum_abs_residual_longitudinal,
+                abs(float(policy_diagnostics.get("residual_longitudinal", 0.0))),
+            )
 
             location = current_transform.location
             if previous_location is not None:
@@ -537,6 +564,7 @@ def evaluate_episode(
                     "collision_contact": image.frame in collision_frames,
                     "no_progress": stalled,
                     "policy_pipeline_latency_ms": latency_ms,
+                    **policy_diagnostics,
                 }
             )
 
@@ -595,6 +623,12 @@ def evaluate_episode(
             "policy_pipeline_latency": latency,
             "telemetry_file": str(telemetry_path) if telemetry_path is not None else None,
             "video_file": str(video_path) if video_path is not None else None,
+            "recovery_diagnostics": {
+                "active_ticks": recovery_active_ticks,
+                "activation_events": recovery_activation_events,
+                "maximum_abs_residual_steering": maximum_abs_residual_steering,
+                "maximum_abs_residual_longitudinal": maximum_abs_residual_longitudinal,
+            },
         }
     finally:
         if video_writer is not None:

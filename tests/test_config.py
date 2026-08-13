@@ -26,6 +26,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["corrective_collection"]["minimum_free_disk_gib"], 90)
         self.assertEqual(config["temporal_behavioral_cloning"]["history_frames"], 4)
         self.assertEqual(config["temporal_behavioral_cloning"]["batch_size"], 8)
+        self.assertEqual(config["diffusion_policy"]["action_horizon"], 16)
+        self.assertEqual(config["diffusion_policy"]["inference_steps"], 10)
+        self.assertEqual(config["diffusion_policy"]["batch_size"], 4)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

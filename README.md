@@ -317,3 +317,10 @@ lane error can keep preemptive steering safety active without activating learned
 The launch guard may now operate concurrently with that deterministic steering correction,
 but remains blocked by active learned recovery, recovery cooldown, red lights, close lead
 vehicles, or unsafe geometry. The speed envelope remains the final longitudinal authority.
+
+Phase 7 adds the first temporal diffusion-policy implementation. It consumes the same four
+observation frames as temporal BC, but denoises a 16-action steering/longitudinal sequence
+with a cosine schedule and deterministic 10-step DDIM inference. This milestone intentionally
+stops before CARLA deployment: model, dataset, GPU training, sampled-action quality, and p95
+latency must pass before the policy is connected to the frozen Phase 6 safety envelope. See
+`docs/phase7_diffusion_preflight.md`.

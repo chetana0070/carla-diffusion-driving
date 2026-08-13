@@ -32,6 +32,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "closed_loop_evaluation",
         "corrective_collection",
         "temporal_behavioral_cloning",
+        "diffusion_policy",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -46,6 +47,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     closed_loop = config["closed_loop_evaluation"]
     corrective = config["corrective_collection"]
     temporal_bc = config["temporal_behavioral_cloning"]
+    diffusion = config["diffusion_policy"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -228,6 +230,54 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         temporal_bc["normalized_state_clip"] > 0,
         "temporal normalized-state clip must be positive",
+    )
+    _require(
+        diffusion["history_frames"] == camera["history_frames"],
+        "diffusion history must match the observation contract",
+    )
+    _require(
+        diffusion["action_horizon"] == policy["action_horizon"]
+        and diffusion["execute_steps"] == policy["execute_steps"],
+        "diffusion action and execution horizons must match policy",
+    )
+    _require(
+        diffusion["action_dimension"] == policy["action_dimension"],
+        "diffusion action dimension must match policy",
+    )
+    _require(
+        diffusion["state_input_dimension"] == preprocessing["model_state_dimension"]
+        and diffusion["condition_input_dimension"]
+        == preprocessing["categorical_condition_dimension"],
+        "diffusion state and condition dimensions must match preprocessing",
+    )
+    _require(
+        diffusion["image_encoder"] == policy["visual_encoder"]
+        and diffusion["image_size"] == camera["model_width"] == camera["model_height"],
+        "diffusion image contract must match the policy camera",
+    )
+    _require(
+        diffusion["diffusion_steps"] >= diffusion["inference_steps"] > 0,
+        "invalid diffusion training or inference step count",
+    )
+    _require(
+        diffusion["denoiser_dimension"] % diffusion["denoiser_heads"] == 0,
+        "diffusion denoiser dimension must be divisible by attention heads",
+    )
+    _require(
+        0 <= diffusion["dropout"] < 1
+        and 0 <= diffusion["cosine_s"] < 1
+        and diffusion["ddim_eta"] >= 0,
+        "invalid diffusion regularization or schedule parameters",
+    )
+    _require(
+        diffusion["batch_size"] > 0
+        and diffusion["epochs"] > 0
+        and diffusion["sampling_evaluation_batches"] > 0,
+        "diffusion training dimensions must be positive",
+    )
+    _require(
+        diffusion["freeze_encoder_epochs"] < diffusion["epochs"],
+        "diffusion encoder freeze period must be shorter than training",
     )
 
     split_sets = [

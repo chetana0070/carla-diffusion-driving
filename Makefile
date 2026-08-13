@@ -1,4 +1,10 @@
-.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train phase5-latency phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect phase6-audit phase6-prepare phase6-train-preflight phase6-residual-train phase6-residual-closed-loop phase6-safety-smoke
+.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare \
+	phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop \
+	phase5-model-smoke phase5-train-smoke phase5-train phase5-latency \
+	phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect \
+	phase6-audit phase6-prepare phase6-train-preflight phase6-residual-train \
+	phase6-residual-closed-loop phase6-safety-smoke phase6-liveness-smoke \
+	phase7-model-smoke phase7-train-smoke phase7-latency
 
 test:
 	python -m unittest discover -s tests -v
@@ -79,3 +85,12 @@ phase6-safety-smoke:
 phase6-liveness-smoke:
 	CARLA_RENDER_MODE=live PHASE6_RESIDUAL_SEED=20260902 PHASE6_RESIDUAL_EPISODES=1 PHASE6_RESIDUAL_TICKS_PER_EPISODE=300 PHASE6_RESIDUAL_BACKGROUND_VEHICLES=8 PHASE6_RESIDUAL_REPORT=artifacts/evaluations/phase6_liveness_smoke_v153.json PHASE6_RESIDUAL_TELEMETRY_DIR=artifacts/evaluations/phase6_liveness_smoke_v153_telemetry PHASE6_RESIDUAL_SAVE_VIDEO=1 PHASE6_RESIDUAL_VIDEO_DIR=artifacts/evaluations/phase6_liveness_smoke_v153_videos ./scripts/run_phase6_residual_closed_loop.sh
 	python scripts/validate_phase6_safety_smoke.py --report artifacts/evaluations/phase6_liveness_smoke_v153.json --telemetry-dir artifacts/evaluations/phase6_liveness_smoke_v153_telemetry
+
+phase7-model-smoke:
+	python scripts/smoke_phase7_diffusion_model.py
+
+phase7-train-smoke:
+	python scripts/train_diffusion_policy.py --smoke --output-dir artifacts/checkpoints/phase7_diffusion_smoke
+
+phase7-latency:
+	python scripts/benchmark_diffusion_latency.py --checkpoint artifacts/checkpoints/phase7_diffusion_smoke/best.pt

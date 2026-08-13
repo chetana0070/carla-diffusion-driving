@@ -324,3 +324,7 @@ with a cosine schedule and deterministic 10-step DDIM inference. This milestone 
 stops before CARLA deployment: model, dataset, GPU training, sampled-action quality, and p95
 latency must pass before the policy is connected to the frozen Phase 6 safety envelope. See
 `docs/phase7_diffusion_preflight.md`.
+
+Phase 7.1 adds a leakage-resistant full-test promotion gate. A deployment noise seed is
+selected only on validation data, then diffusion is compared with temporal BC on every
+untouched test window. See `docs/phase7_1_offline_promotion_gate.md`.

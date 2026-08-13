@@ -33,6 +33,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "corrective_collection",
         "temporal_behavioral_cloning",
         "diffusion_policy",
+        "diffusion_offline_evaluation",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -48,6 +49,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     corrective = config["corrective_collection"]
     temporal_bc = config["temporal_behavioral_cloning"]
     diffusion = config["diffusion_policy"]
+    diffusion_evaluation = config["diffusion_offline_evaluation"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -278,6 +280,21 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     _require(
         diffusion["freeze_encoder_epochs"] < diffusion["epochs"],
         "diffusion encoder freeze period must be shorter than training",
+    )
+    _require(
+        len(diffusion_evaluation["candidate_noise_seeds"]) >= 3
+        and len(set(diffusion_evaluation["candidate_noise_seeds"]))
+        == len(diffusion_evaluation["candidate_noise_seeds"]),
+        "diffusion evaluation requires at least three unique noise seeds",
+    )
+    _require(
+        diffusion_evaluation["maximum_relative_rmse"] >= 1,
+        "diffusion relative RMSE limit cannot be below the baseline",
+    )
+    _require(
+        diffusion_evaluation["maximum_absolute_longitudinal_bias"] >= 0
+        and diffusion_evaluation["maximum_longitudinal_behavior_drift"] >= 0,
+        "diffusion bias and behavior-drift limits must be non-negative",
     )
 
     split_sets = [

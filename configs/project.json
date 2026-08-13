@@ -165,6 +165,12 @@
     "normalized_state_clip": 10.0,
     "sampling_evaluation_batches": 4
   },
+  "diffusion_offline_evaluation": {
+    "candidate_noise_seeds": [17, 29, 43, 71],
+    "maximum_relative_rmse": 1.25,
+    "maximum_absolute_longitudinal_bias": 0.1,
+    "maximum_longitudinal_behavior_drift": 0.2
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,

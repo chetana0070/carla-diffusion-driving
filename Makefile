@@ -1,4 +1,4 @@
-.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train phase5-latency phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect phase6-audit
+.PHONY: test validate phase0 phase1 phase2-validate phase2-audit phase3-prepare phase4-model-smoke phase4-train-smoke phase4-train phase4-closed-loop phase5-model-smoke phase5-train-smoke phase5-train phase5-latency phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect phase6-audit phase6-prepare phase6-train-preflight phase6-residual-train phase6-residual-closed-loop phase6-safety-smoke
 
 test:
 	python -m unittest discover -s tests -v
@@ -59,3 +59,23 @@ phase6-collect:
 
 phase6-audit:
 	python scripts/audit_phase6_corrections.py
+
+phase6-prepare:
+	python scripts/prepare_phase6_training_data.py
+
+phase6-train-preflight:
+	python scripts/train_temporal_bc.py --processed-root data/processed/phase6_corrective_v2 --initial-checkpoint artifacts/checkpoints/phase5_temporal_bc_v080/best.pt --epochs 8 --learning-rate 0.00003 --freeze-encoder-epochs 8 --corrective-validation-split correction_validation --max-nominal-validation-degradation-fraction 0.05 --output-dir artifacts/checkpoints/phase6_dual_gate_v120
+
+phase6-residual-train:
+	python scripts/train_residual_correction.py
+
+phase6-residual-closed-loop:
+	./scripts/run_phase6_residual_closed_loop.sh
+
+phase6-safety-smoke:
+	CARLA_RENDER_MODE=live PHASE6_RESIDUAL_EPISODES=1 PHASE6_RESIDUAL_TICKS_PER_EPISODE=300 PHASE6_RESIDUAL_BACKGROUND_VEHICLES=2 PHASE5_SEED=20260901 PHASE6_RESIDUAL_REPORT=artifacts/evaluations/phase6_safety_smoke_v142.json PHASE6_RESIDUAL_TELEMETRY_DIR=artifacts/evaluations/phase6_safety_smoke_v142_telemetry PHASE6_RESIDUAL_SAVE_VIDEO=1 PHASE6_RESIDUAL_VIDEO_DIR=artifacts/evaluations/phase6_safety_smoke_v142_videos ./scripts/run_phase6_residual_closed_loop.sh
+	python scripts/validate_phase6_safety_smoke.py --report artifacts/evaluations/phase6_safety_smoke_v142.json --telemetry-dir artifacts/evaluations/phase6_safety_smoke_v142_telemetry
+
+phase6-liveness-smoke:
+	CARLA_RENDER_MODE=live PHASE6_RESIDUAL_SEED=20260902 PHASE6_RESIDUAL_EPISODES=1 PHASE6_RESIDUAL_TICKS_PER_EPISODE=300 PHASE6_RESIDUAL_BACKGROUND_VEHICLES=8 PHASE6_RESIDUAL_REPORT=artifacts/evaluations/phase6_liveness_smoke_v153.json PHASE6_RESIDUAL_TELEMETRY_DIR=artifacts/evaluations/phase6_liveness_smoke_v153_telemetry PHASE6_RESIDUAL_SAVE_VIDEO=1 PHASE6_RESIDUAL_VIDEO_DIR=artifacts/evaluations/phase6_liveness_smoke_v153_videos ./scripts/run_phase6_residual_closed_loop.sh
+	python scripts/validate_phase6_safety_smoke.py --report artifacts/evaluations/phase6_liveness_smoke_v153.json --telemetry-dir artifacts/evaluations/phase6_liveness_smoke_v153_telemetry

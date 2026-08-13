@@ -258,3 +258,62 @@ python scripts/audit_phase6_corrections.py
 
 Corrective data remains training-only. Frozen validation and test routes are
 not expanded or relabeled. See `docs/phase6_corrective_collection.md`.
+
+## Phase 6 corrective retraining
+
+After triggered expert-recovery collection passes its audit, merge the accepted
+corrections into training only and resume from the frozen Phase 5 checkpoint:
+
+```bash
+python scripts/prepare_phase6_training_data.py
+make phase6-train-preflight
+```
+
+The merge preserves the original validation/test rows and normalization exactly,
+rejects collision-labelled or non-intervention samples, and excludes hidden failed
+rollouts. Two complete correction episodes form a separate recovery-validation
+split. Promotion requires recovery improvement while nominal validation degradation
+remains within 5%. See `docs/phase6_corrective_retraining.md`.
+
+When direct fine-tuning cannot satisfy both gates, train a bounded recovery residual while
+keeping temporal BC frozen:
+
+```bash
+make phase6-residual-train
+make phase6-residual-closed-loop
+```
+
+The residual is activated only by a hysteretic geometric recovery gate. Normal policy output
+is unchanged. See `docs/phase6_gated_residual.md`.
+
+Phase 6.4 adds a deterministic recovery safety envelope after the Phase 6.3 residual improved
+short-horizon progress but remained active after crossing lane center. The envelope limits
+recovery duration, adds cooldown, rejects directionally unsafe steering, suppresses added
+throttle, governs recovery speed, and limits steering slew. The residual checkpoint remains
+frozen. Run `make phase6-safety-smoke` before any three-seed evaluation.
+
+Phase 6.4.2 extends that arbitration after v1.4.1 completed 300 ticks without collision but
+entered recovery above the speed gate and recorded two lane invasions. The deterministic
+safety envelope now starts at 0.15 m lane offset or 4 degrees heading error, before the
+learned residual activates, and its centering authority scales from 0.03 to 0.15 with lane
+error. Recovery remains bounded to 20 ticks. Latency promotion reports the first-observation
+cold start separately from steady-state inference.
+
+Phase 6.5 addresses the remaining seed-specific liveness failure. When the vehicle remains
+below 0.10 m/s for ten ticks with no red light, no close lead vehicle, safe lane geometry,
+and no active safety recovery, a bounded launch guard applies at least 0.30 longitudinal
+authority. It releases at 1.50 m/s, after 30 active ticks, or immediately when any safety
+blocker appears, then enforces a 20-tick cooldown. Run `make phase6-liveness-smoke` on the
+previously failing seed before repeating the three-seed suite.
+
+Phase 6.5.2 decouples the deployment speed envelope from lane-recovery activation. The
+policy now coasts from 4.0 m/s, brakes from 4.25 m/s, and applies emergency braking from
+4.75 m/s on every tick. This preserves the low-speed liveness launch while adding one-step
+margin beneath the frozen 5.0 m/s acceptance ceiling. The validator measures peak speed
+across the complete rollout rather than only safety-active rows.
+
+Phase 6.5.3 resolves a liveness arbitration deadlock found on seed `20260902`. Moderate
+lane error can keep preemptive steering safety active without activating learned recovery.
+The launch guard may now operate concurrently with that deterministic steering correction,
+but remains blocked by active learned recovery, recovery cooldown, red lights, close lead
+vehicles, or unsafe geometry. The speed envelope remains the final longitudinal authority.

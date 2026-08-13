@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -26,7 +27,9 @@ from carla_diffusion.diffusion_dataset import DiffusionWindowDataset
 from carla_diffusion.diffusion_policy import (
     DiffusionSchedule,
     TemporalDiffusionPolicy,
+    weighted_action_reconstruction_loss,
     weighted_noise_mse,
+    weighted_temporal_derivative_loss,
 )
 
 
@@ -46,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--learning-rate", type=float)
+    parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument("--pretrained", action="store_true")
     parser.add_argument("--allow-cpu", action="store_true")
     parser.add_argument("--smoke", action="store_true")
@@ -62,6 +66,14 @@ def seed_everything(seed: int) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(True, warn_only=True)
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def build_model(config: dict[str, Any], *, pretrained: bool) -> TemporalDiffusionPolicy:
@@ -118,9 +130,14 @@ def train_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     max_batches: int | None,
-) -> float:
+    *,
+    noise_loss_weight: float,
+    clean_action_loss_weight: float,
+    temporal_derivative_loss_weight: float,
+    longitudinal_reconstruction_weight: float,
+) -> dict[str, float]:
     model.train()
-    loss_sum = 0.0
+    sums = {"total": 0.0, "noise": 0.0, "clean_action": 0.0, "derivative": 0.0}
     batches = 0
     for batch_index, host_batch in enumerate(loader):
         if max_batches is not None and batch_index >= max_batches:
@@ -141,7 +158,27 @@ def train_epoch(
                 batch["state_history"],
                 batch["condition"],
             )
-            loss = weighted_noise_mse(prediction, noise, batch["weight"])
+            noise_loss = weighted_noise_mse(prediction, noise, batch["weight"])
+            predicted_clean = schedule.predict_clean_actions(
+                noisy_actions, prediction, timesteps
+            )
+            clean_action_loss = weighted_action_reconstruction_loss(
+                predicted_clean,
+                target,
+                batch["weight"],
+                longitudinal_weight=longitudinal_reconstruction_weight,
+            )
+            derivative_loss = weighted_temporal_derivative_loss(
+                predicted_clean,
+                target,
+                batch["weight"],
+                longitudinal_weight=longitudinal_reconstruction_weight,
+            )
+            loss = (
+                noise_loss_weight * noise_loss
+                + clean_action_loss_weight * clean_action_loss
+                + temporal_derivative_loss_weight * derivative_loss
+            )
         if not bool(torch.isfinite(loss)):
             raise FloatingPointError(f"non-finite diffusion loss at batch {batch_index}")
         scaler.scale(loss).backward()
@@ -149,11 +186,14 @@ def train_epoch(
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         scaler.step(optimizer)
         scaler.update()
-        loss_sum += float(loss.detach())
+        sums["total"] += float(loss.detach())
+        sums["noise"] += float(noise_loss.detach())
+        sums["clean_action"] += float(clean_action_loss.detach())
+        sums["derivative"] += float(derivative_loss.detach())
         batches += 1
     if batches == 0:
         raise RuntimeError("diffusion training loader produced no batches")
-    return loss_sum / batches
+    return {name: value / batches for name, value in sums.items()}
 
 
 @torch.inference_mode()
@@ -322,6 +362,16 @@ def main() -> int:
     model = build_model(
         config, pretrained=args.pretrained and not args.smoke
     ).to(device)
+    initial_checkpoint_sha256: str | None = None
+    if args.initial_checkpoint is not None:
+        initial_path = args.initial_checkpoint.resolve()
+        initial_checkpoint = torch.load(
+            initial_path, map_location=device, weights_only=False
+        )
+        if initial_checkpoint.get("model_type") != "temporal_diffusion_policy":
+            raise ValueError("initial checkpoint is not a temporal diffusion policy")
+        model.load_state_dict(initial_checkpoint["model_state_dict"])
+        initial_checkpoint_sha256 = file_sha256(initial_path)
     schedule = DiffusionSchedule(
         steps=int(config["diffusion_steps"]), cosine_s=float(config["cosine_s"])
     ).to(device)
@@ -342,7 +392,7 @@ def main() -> int:
     for epoch in range(1, epochs + 1):
         if epoch == freeze_epochs + 1 and freeze_epochs > 0:
             model.set_encoder_trainable(True)
-        training_loss = train_epoch(
+        training_losses = train_epoch(
             model,
             schedule,
             loaders["train"],
@@ -350,6 +400,14 @@ def main() -> int:
             scaler,
             device,
             max_train_batches,
+            noise_loss_weight=float(config["noise_loss_weight"]),
+            clean_action_loss_weight=float(config["clean_action_loss_weight"]),
+            temporal_derivative_loss_weight=float(
+                config["temporal_derivative_loss_weight"]
+            ),
+            longitudinal_reconstruction_weight=float(
+                config["longitudinal_reconstruction_weight"]
+            ),
         )
         validation = evaluate_noise(
             model,
@@ -359,10 +417,26 @@ def main() -> int:
             seed=seed + epoch,
             max_batches=max_eval_batches,
         )
-        record = {"epoch": epoch, "training_weighted_noise_mse": training_loss, **validation}
+        sampled_validation = evaluate_sampling(
+            model,
+            schedule,
+            loaders["validation"],
+            device,
+            seed=int(config["selection_noise_seed"]),
+            inference_steps=int(config["inference_steps"]),
+            max_batches=(
+                1 if args.smoke else int(config["selection_sampling_batches"])
+            ),
+        )
+        record = {
+            "epoch": epoch,
+            "training_objective": training_losses,
+            **validation,
+            "sampled_validation": sampled_validation,
+        }
         history.append(record)
         print(json.dumps(record), flush=True)
-        metric = float(validation["weighted_noise_mse"])
+        metric = float(sampled_validation["first_action_joint_rmse"])
         if not math.isfinite(metric):
             raise FloatingPointError(f"non-finite validation metric at epoch {epoch}")
         if metric < best_validation:
@@ -377,7 +451,16 @@ def main() -> int:
                     "epoch": epoch,
                     "config": project_config,
                     "pretrained": args.pretrained and not args.smoke,
-                    "validation": validation,
+                    "initial_checkpoint": (
+                        str(args.initial_checkpoint.resolve())
+                        if args.initial_checkpoint is not None
+                        else None
+                    ),
+                    "initial_checkpoint_sha256": initial_checkpoint_sha256,
+                    "validation": {
+                        "noise": validation,
+                        "sampled_action": sampled_validation,
+                    },
                 },
                 temporary,
             )
@@ -418,8 +501,14 @@ def main() -> int:
         "torch_version": torch.__version__,
         "dataset_sizes": {name: len(dataset) for name, dataset in datasets.items()},
         "best_epoch": best_epoch,
-        "validation_selection_metric": "weighted_noise_mse",
-        "best_validation_weighted_noise_mse": best_validation,
+        "validation_selection_metric": "sampled_first_action_joint_rmse",
+        "best_validation_sampled_first_action_joint_rmse": best_validation,
+        "initial_checkpoint": (
+            str(args.initial_checkpoint.resolve())
+            if args.initial_checkpoint is not None
+            else None
+        ),
+        "initial_checkpoint_sha256": initial_checkpoint_sha256,
         "test_noise_metrics": test_noise,
         "test_sampling_metrics": test_sampling,
         "training_hyperparameters": {
@@ -431,6 +520,14 @@ def main() -> int:
             "action_horizon": int(config["action_horizon"]),
             "execute_steps": int(config["execute_steps"]),
             "encoder_freeze_epochs": freeze_epochs,
+            "noise_loss_weight": float(config["noise_loss_weight"]),
+            "clean_action_loss_weight": float(config["clean_action_loss_weight"]),
+            "longitudinal_reconstruction_weight": float(
+                config["longitudinal_reconstruction_weight"]
+            ),
+            "temporal_derivative_loss_weight": float(
+                config["temporal_derivative_loss_weight"]
+            ),
         },
         "epochs": history,
         "elapsed_wall_seconds": round(time.perf_counter() - started, 3),

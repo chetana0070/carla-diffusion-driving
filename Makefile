@@ -4,7 +4,8 @@
 	phase5-closed-loop phase5-expert-oracle phase5-diagnostics phase6-collect \
 	phase6-audit phase6-prepare phase6-train-preflight phase6-residual-train \
 	phase6-residual-closed-loop phase6-safety-smoke phase6-liveness-smoke \
-	phase7-model-smoke phase7-train-smoke phase7-latency phase7-offline-gate
+	phase7-model-smoke phase7-train-smoke phase7-latency phase7-offline-gate \
+	phase7-objective-smoke
 
 test:
 	python -m unittest discover -s tests -v
@@ -97,3 +98,8 @@ phase7-latency:
 
 phase7-offline-gate:
 	python scripts/evaluate_diffusion_offline.py
+
+phase7-objective-smoke:
+	python scripts/train_diffusion_policy.py --smoke --initial-checkpoint \
+		artifacts/checkpoints/phase7_diffusion_v161/best.pt \
+		--output-dir artifacts/checkpoints/phase7_objective_smoke_v180

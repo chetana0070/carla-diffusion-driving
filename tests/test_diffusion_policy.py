@@ -12,7 +12,9 @@ try:
         DiffusionSchedule,
         TemporalDiffusionPolicy,
         cosine_beta_schedule,
+        weighted_action_reconstruction_loss,
         weighted_noise_mse,
+        weighted_temporal_derivative_loss,
     )
 except ImportError:
     torch = None
@@ -96,6 +98,31 @@ class DiffusionPolicyTests(unittest.TestCase):
         weights = torch.tensor([1.0, 3.0])
         loss = weighted_noise_mse(prediction, target, weights)
         self.assertAlmostEqual(float(loss), 3.25)
+
+    def test_clean_action_reconstruction_is_bounded(self) -> None:
+        assert torch is not None
+        schedule = DiffusionSchedule(20)
+        clean = torch.tensor([[[0.2, -0.4], [0.3, 0.5]]])
+        noise = torch.tensor([[[0.1, -0.2], [0.4, 0.2]]])
+        timesteps = torch.tensor([7])
+        noisy = schedule.add_noise(clean, noise, timesteps)
+        reconstructed = schedule.predict_clean_actions(noisy, noise, timesteps)
+        self.assertTrue(torch.allclose(reconstructed, clean, atol=1e-5))
+        self.assertTrue(bool(torch.all(torch.abs(reconstructed) <= 1.0)))
+
+    def test_reconstruction_and_derivative_losses(self) -> None:
+        assert torch is not None
+        target = torch.zeros(1, 3, 2)
+        prediction = torch.tensor([[[0.0, 0.0], [0.2, 0.4], [0.4, 0.8]]])
+        weights = torch.ones(1)
+        reconstruction = weighted_action_reconstruction_loss(
+            prediction, target, weights, longitudinal_weight=2.0
+        )
+        derivative = weighted_temporal_derivative_loss(
+            prediction, target, weights, longitudinal_weight=2.0
+        )
+        self.assertGreater(float(reconstruction), 0)
+        self.assertGreater(float(derivative), 0)
 
     def test_frozen_encoder_stays_in_evaluation_mode(self) -> None:
         model = self.build_model()

@@ -282,6 +282,17 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "diffusion encoder freeze period must be shorter than training",
     )
     _require(
+        diffusion["noise_loss_weight"] > 0
+        and diffusion["clean_action_loss_weight"] >= 0
+        and diffusion["longitudinal_reconstruction_weight"] >= 1
+        and diffusion["temporal_derivative_loss_weight"] >= 0,
+        "diffusion objective weights are invalid",
+    )
+    _require(
+        diffusion["selection_sampling_batches"] > 0,
+        "diffusion selection sampling coverage must be positive",
+    )
+    _require(
         len(diffusion_evaluation["candidate_noise_seeds"]) >= 3
         and len(set(diffusion_evaluation["candidate_noise_seeds"]))
         == len(diffusion_evaluation["candidate_noise_seeds"]),

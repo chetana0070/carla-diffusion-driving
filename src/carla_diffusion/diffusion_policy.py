@@ -66,6 +66,25 @@ class DiffusionSchedule(nn.Module):
         )
         return clean_scale * clean_actions + noise_scale * noise
 
+    def predict_clean_actions(
+        self,
+        noisy_actions: torch.Tensor,
+        predicted_noise: torch.Tensor,
+        timesteps: torch.Tensor,
+    ) -> torch.Tensor:
+        if noisy_actions.shape != predicted_noise.shape or noisy_actions.ndim != 3:
+            raise ValueError("diffusion action tensors must be matching BxHxD values")
+        clean_scale = self._extract(
+            self.sqrt_alphas_cumulative, timesteps, noisy_actions
+        )
+        noise_scale = self._extract(
+            self.sqrt_one_minus_alphas_cumulative, timesteps, noisy_actions
+        )
+        reconstructed = (noisy_actions - noise_scale * predicted_noise) / torch.clamp(
+            clean_scale, min=1e-6
+        )
+        return torch.clamp(reconstructed, -1.0, 1.0)
+
     @torch.inference_mode()
     def ddim_sample(
         self,
@@ -328,4 +347,43 @@ def weighted_noise_mse(
     flat_weights = weights.reshape(-1)
     return torch.sum(per_sample * flat_weights) / torch.clamp(
         torch.sum(flat_weights), min=1e-8
+    )
+
+
+def weighted_action_reconstruction_loss(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    sample_weights: torch.Tensor,
+    *,
+    longitudinal_weight: float = 2.0,
+) -> torch.Tensor:
+    if prediction.shape != target.shape or prediction.ndim != 3:
+        raise ValueError("reconstructed actions must be matching BxHxD tensors")
+    if prediction.shape[2] != 2 or sample_weights.numel() != prediction.shape[0]:
+        raise ValueError("invalid action dimensions or sample weights")
+    if longitudinal_weight < 1:
+        raise ValueError("longitudinal reconstruction weight must be at least one")
+    dimension_weights = prediction.new_tensor([1.0, longitudinal_weight])
+    error = nn.functional.smooth_l1_loss(prediction, target, reduction="none")
+    per_sample = torch.mean(error * dimension_weights, dim=(1, 2))
+    weights = sample_weights.reshape(-1)
+    return torch.sum(per_sample * weights) / torch.clamp(torch.sum(weights), min=1e-8)
+
+
+def weighted_temporal_derivative_loss(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    sample_weights: torch.Tensor,
+    *,
+    longitudinal_weight: float = 2.0,
+) -> torch.Tensor:
+    if prediction.shape != target.shape or prediction.ndim != 3:
+        raise ValueError("temporal action tensors must be matching BxHxD values")
+    if prediction.shape[1] < 2:
+        raise ValueError("temporal derivative loss requires at least two actions")
+    return weighted_action_reconstruction_loss(
+        prediction[:, 1:] - prediction[:, :-1],
+        target[:, 1:] - target[:, :-1],
+        sample_weights,
+        longitudinal_weight=longitudinal_weight,
     )

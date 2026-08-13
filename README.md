@@ -328,3 +328,8 @@ latency must pass before the policy is connected to the frozen Phase 6 safety en
 Phase 7.1 adds a leakage-resistant full-test promotion gate. A deployment noise seed is
 selected only on validation data, then diffusion is compared with temporal BC on every
 untouched test window. See `docs/phase7_1_offline_promotion_gate.md`.
+
+Phase 7.2 corrects the failed sampled-action objective without changing architecture or gates.
+It adds clean-action and temporal-derivative supervision, weights longitudinal reconstruction,
+and selects checkpoints using sampled validation action RMSE. See
+`docs/phase7_2_objective_correction.md`.

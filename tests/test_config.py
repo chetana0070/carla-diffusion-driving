@@ -32,6 +32,10 @@ class ConfigTests(unittest.TestCase):
             len(config["diffusion_offline_evaluation"]["candidate_noise_seeds"]),
             3,
         )
+        self.assertEqual(
+            config["diffusion_policy"]["longitudinal_reconstruction_weight"],
+            2.0,
+        )
         self.assertEqual(config["diffusion_policy"]["batch_size"], 4)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 

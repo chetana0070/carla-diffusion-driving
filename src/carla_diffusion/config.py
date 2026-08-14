@@ -34,6 +34,8 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "temporal_behavioral_cloning",
         "diffusion_policy",
         "diffusion_offline_evaluation",
+        "factorized_policy",
+        "factorized_offline_evaluation",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -50,6 +52,8 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     temporal_bc = config["temporal_behavioral_cloning"]
     diffusion = config["diffusion_policy"]
     diffusion_evaluation = config["diffusion_offline_evaluation"]
+    factorized = config["factorized_policy"]
+    factorized_evaluation = config["factorized_offline_evaluation"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -306,6 +310,85 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         diffusion_evaluation["maximum_absolute_longitudinal_bias"] >= 0
         and diffusion_evaluation["maximum_longitudinal_behavior_drift"] >= 0,
         "diffusion bias and behavior-drift limits must be non-negative",
+    )
+    shared_factorized_fields = (
+        "history_frames",
+        "action_horizon",
+        "execute_steps",
+        "action_dimension",
+        "state_input_dimension",
+        "condition_input_dimension",
+        "image_encoder",
+        "image_projection_dimension",
+        "state_projection_dimension",
+        "temporal_hidden_dimension",
+        "condition_projection_dimension",
+        "denoiser_dimension",
+        "denoiser_layers",
+        "denoiser_heads",
+        "diffusion_steps",
+        "inference_steps",
+        "cosine_s",
+        "ddim_eta",
+        "image_size",
+    )
+    _require(
+        all(factorized[field] == diffusion[field] for field in shared_factorized_fields),
+        "factorized steering branch must match the released diffusion architecture",
+    )
+    _require(
+        factorized["history_frames"] == camera["history_frames"]
+        and factorized["action_horizon"] == policy["action_horizon"]
+        and factorized["execute_steps"] == policy["execute_steps"],
+        "factorized temporal horizons must match the deployment policy",
+    )
+    _require(
+        factorized["longitudinal_hidden_dimension"] > 0
+        and factorized["batch_size"] > 0
+        and factorized["epochs"] > 0
+        and factorized["selection_sampling_batches"] > 0,
+        "factorized training dimensions must be positive",
+    )
+    _require(
+        factorized["freeze_encoder_epochs"] < factorized["epochs"]
+        and 0 < factorized["learning_rate"] < 1
+        and factorized["weight_decay"] >= 0,
+        "factorized optimizer configuration is invalid",
+    )
+    _require(
+        0 <= factorized["longitudinal_neutral_threshold"] < 1
+        and all(
+            factorized["longitudinal_mode_weights"][name] > 0
+            for name in ("braking", "neutral", "acceleration")
+        ),
+        "factorized longitudinal mode configuration is invalid",
+    )
+    factorized_loss_names = (
+        "steering_noise_loss_weight",
+        "steering_action_loss_weight",
+        "steering_derivative_loss_weight",
+        "longitudinal_action_loss_weight",
+        "longitudinal_derivative_loss_weight",
+        "longitudinal_mode_loss_weight",
+    )
+    _require(
+        all(factorized[name] >= 0 for name in factorized_loss_names)
+        and factorized["steering_noise_loss_weight"] > 0
+        and factorized["longitudinal_action_loss_weight"] > 0,
+        "factorized objective weights are invalid",
+    )
+    _require(
+        len(factorized_evaluation["candidate_noise_seeds"]) >= 3
+        and len(set(factorized_evaluation["candidate_noise_seeds"]))
+        == len(factorized_evaluation["candidate_noise_seeds"]),
+        "factorized evaluation requires at least three unique noise seeds",
+    )
+    _require(
+        factorized_evaluation["maximum_relative_rmse"] >= 1
+        and factorized_evaluation["maximum_absolute_longitudinal_bias"] >= 0
+        and factorized_evaluation["maximum_longitudinal_behavior_drift"] >= 0
+        and factorized_evaluation["maximum_longitudinal_smoothness_ratio"] >= 1,
+        "factorized promotion thresholds are invalid",
     )
 
     split_sets = [

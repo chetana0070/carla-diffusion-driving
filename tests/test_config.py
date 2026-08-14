@@ -37,6 +37,15 @@ class ConfigTests(unittest.TestCase):
             2.0,
         )
         self.assertEqual(config["diffusion_policy"]["batch_size"], 4)
+        self.assertEqual(config["factorized_policy"]["action_horizon"], 16)
+        self.assertEqual(
+            config["factorized_policy"]["longitudinal_mode_weights"]["acceleration"],
+            1.5,
+        )
+        self.assertGreaterEqual(
+            len(config["factorized_offline_evaluation"]["candidate_noise_seeds"]),
+            3,
+        )
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

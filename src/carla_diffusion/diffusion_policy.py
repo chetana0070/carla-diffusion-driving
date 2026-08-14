@@ -96,10 +96,14 @@ class DiffusionSchedule(nn.Module):
         inference_steps: int,
         eta: float = 0.0,
         initial_noise: torch.Tensor | None = None,
+        context: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if not 1 <= inference_steps <= self.steps or eta < 0:
             raise ValueError("invalid DDIM inference configuration")
-        context = model.encode_observation(images, state_history, condition)
+        if context is None:
+            context = model.encode_observation(images, state_history, condition)
+        elif context.shape[0] != images.shape[0]:
+            raise ValueError("precomputed diffusion context has the wrong batch size")
         batch_size = images.shape[0]
         actions = (
             torch.randn(

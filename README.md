@@ -333,3 +333,10 @@ Phase 7.2 corrects the failed sampled-action objective without changing architec
 It adds clean-action and temporal-derivative supervision, weights longitudinal reconstruction,
 and selects checkpoints using sampled validation action RMSE. See
 `docs/phase7_2_objective_correction.md`.
+
+Phase 7.3 responds to the frozen Phase 7.2 result without weakening its acceptance contract.
+The released diffusion encoder and denoiser continue to generate the steering chunk, while a
+deterministic temporal head predicts the longitudinal chunk and an auxiliary classifier learns
+braking, neutral, and acceleration modes. The candidate must pass full validation/test coverage,
+axis and joint RMSE, bias, behavior, longitudinal chunk smoothness, and latency gates before any
+CARLA deployment. See `docs/phase7_3_factorized_policy.md`.

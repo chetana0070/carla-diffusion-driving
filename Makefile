@@ -5,7 +5,8 @@
 	phase6-audit phase6-prepare phase6-train-preflight phase6-residual-train \
 	phase6-residual-closed-loop phase6-safety-smoke phase6-liveness-smoke \
 	phase7-model-smoke phase7-train-smoke phase7-latency phase7-offline-gate \
-	phase7-objective-smoke
+	phase7-objective-smoke phase7-factorized-smoke phase7-factorized-train \
+	phase7-factorized-latency phase7-factorized-gate
 
 test:
 	python -m unittest discover -s tests -v
@@ -103,3 +104,23 @@ phase7-objective-smoke:
 	python scripts/train_diffusion_policy.py --smoke --initial-checkpoint \
 		artifacts/checkpoints/phase7_diffusion_v161/best.pt \
 		--output-dir artifacts/checkpoints/phase7_objective_smoke_v180
+
+phase7-factorized-smoke:
+	python scripts/train_factorized_policy.py --smoke --allow-cpu \
+		--output-dir artifacts/checkpoints/phase7_factorized_smoke_v190
+
+phase7-factorized-train:
+	python scripts/train_factorized_policy.py \
+		--initial-diffusion-checkpoint \
+		artifacts/checkpoints/phase7_diffusion_corrected_v180/best.pt \
+		--output-dir artifacts/checkpoints/phase7_factorized_v190
+
+phase7-factorized-latency:
+	python scripts/benchmark_factorized_policy_latency.py \
+		--checkpoint artifacts/checkpoints/phase7_factorized_v190/best.pt
+
+phase7-factorized-gate:
+	python scripts/evaluate_factorized_offline.py \
+		--factorized-checkpoint artifacts/checkpoints/phase7_factorized_v190/best.pt \
+		--latency-report artifacts/evaluations/phase7_factorized_latency_v190.json \
+		--output artifacts/evaluations/phase7_factorized_offline_gate_v190.json

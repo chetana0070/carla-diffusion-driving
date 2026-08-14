@@ -230,3 +230,50 @@ def weighted_mode_classification_loss(
     per_sample = torch.mean(losses, dim=1)
     weights = sample_weights.reshape(-1)
     return torch.sum(per_sample * weights) / torch.clamp(torch.sum(weights), min=1e-8)
+
+
+def set_longitudinal_only_trainable(model: FactorizedTemporalPolicy) -> None:
+    """Freeze the released steering/perception path and expose longitudinal heads."""
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    for module in (
+        model.longitudinal_trunk,
+        model.longitudinal_action_head,
+    ):
+        for parameter in module.parameters():
+            parameter.requires_grad = True
+    model.set_encoder_trainable(False)
+
+
+def longitudinal_finetuning_loss(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    first_action_weight: float,
+    chunk_weight: float,
+    derivative_weight: float,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Optimize the deterministic axis against the RMSE-based promotion gate."""
+    if prediction.shape != target.shape or prediction.ndim != 2:
+        raise ValueError("longitudinal actions must be matching BxH tensors")
+    if prediction.shape[1] < 2:
+        raise ValueError("longitudinal fine-tuning requires a temporal horizon")
+    weights = (first_action_weight, chunk_weight, derivative_weight)
+    if any(weight < 0 for weight in weights) or first_action_weight <= 0:
+        raise ValueError("longitudinal fine-tuning weights are invalid")
+    components = {
+        "first_action_mse": nn.functional.mse_loss(
+            prediction[:, 0], target[:, 0]
+        ),
+        "chunk_mse": nn.functional.mse_loss(prediction, target),
+        "derivative_mse": nn.functional.mse_loss(
+            prediction[:, 1:] - prediction[:, :-1],
+            target[:, 1:] - target[:, :-1],
+        ),
+    }
+    loss = (
+        first_action_weight * components["first_action_mse"]
+        + chunk_weight * components["chunk_mse"]
+        + derivative_weight * components["derivative_mse"]
+    )
+    return loss, components

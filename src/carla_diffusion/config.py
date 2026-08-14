@@ -36,6 +36,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "diffusion_offline_evaluation",
         "factorized_policy",
         "factorized_offline_evaluation",
+        "factorized_longitudinal_finetuning",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -54,6 +55,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     diffusion_evaluation = config["diffusion_offline_evaluation"]
     factorized = config["factorized_policy"]
     factorized_evaluation = config["factorized_offline_evaluation"]
+    factorized_finetuning = config["factorized_longitudinal_finetuning"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -389,6 +391,22 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         and factorized_evaluation["maximum_longitudinal_behavior_drift"] >= 0
         and factorized_evaluation["maximum_longitudinal_smoothness_ratio"] >= 1,
         "factorized promotion thresholds are invalid",
+    )
+    _require(
+        factorized_finetuning["batch_size"] > 0
+        and factorized_finetuning["epochs"] > 0
+        and 0 < factorized_finetuning["learning_rate"] < 1
+        and factorized_finetuning["weight_decay"] >= 0
+        and factorized_finetuning["early_stopping_patience"] > 0
+        and factorized_finetuning["minimum_improvement"] >= 0
+        and factorized_finetuning["gradient_clip_norm"] > 0,
+        "factorized longitudinal fine-tuning optimizer is invalid",
+    )
+    _require(
+        factorized_finetuning["first_action_mse_weight"] > 0
+        and factorized_finetuning["chunk_mse_weight"] >= 0
+        and factorized_finetuning["derivative_mse_weight"] >= 0,
+        "factorized longitudinal fine-tuning objective is invalid",
     )
 
     split_sets = [

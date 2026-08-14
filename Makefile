@@ -124,3 +124,13 @@ phase7-factorized-gate:
 		--factorized-checkpoint artifacts/checkpoints/phase7_factorized_v190/best.pt \
 		--latency-report artifacts/evaluations/phase7_factorized_latency_v190.json \
 		--output artifacts/evaluations/phase7_factorized_offline_gate_v190.json
+
+phase7-longitudinal-smoke:
+	python scripts/finetune_factorized_longitudinal.py --smoke --allow-cpu \
+		--initial-checkpoint artifacts/checkpoints/phase7_factorized_v191/best.pt \
+		--output-dir artifacts/checkpoints/phase7_longitudinal_smoke_v200
+
+phase7-longitudinal-train:
+	python scripts/finetune_factorized_longitudinal.py \
+		--initial-checkpoint artifacts/checkpoints/phase7_factorized_v191/best.pt \
+		--output-dir artifacts/checkpoints/phase7_factorized_longitudinal_v200

@@ -228,6 +228,18 @@
     "maximum_longitudinal_behavior_drift": 0.2,
     "maximum_longitudinal_smoothness_ratio": 1.5
   },
+  "factorized_longitudinal_finetuning": {
+    "batch_size": 8,
+    "epochs": 20,
+    "learning_rate": 0.00001,
+    "weight_decay": 0.0001,
+    "early_stopping_patience": 5,
+    "minimum_improvement": 0.00001,
+    "gradient_clip_norm": 2.0,
+    "first_action_mse_weight": 3.0,
+    "chunk_mse_weight": 1.0,
+    "derivative_mse_weight": 0.1
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,

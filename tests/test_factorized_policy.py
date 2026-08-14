@@ -12,7 +12,9 @@ try:
     from carla_diffusion.factorized_policy import (
         FactorizedTemporalPolicy,
         load_diffusion_warm_start,
+        longitudinal_finetuning_loss,
         longitudinal_modes,
+        set_longitudinal_only_trainable,
         weighted_longitudinal_derivative_loss,
         weighted_longitudinal_loss,
         weighted_mode_classification_loss,
@@ -137,6 +139,35 @@ class FactorizedPolicyTests(unittest.TestCase):
         }
         with self.assertRaises(TypeError):
             load_diffusion_warm_start(model, checkpoint)
+
+    def test_longitudinal_only_scope_freezes_diffusion(self) -> None:
+        model = self.build_model()
+        set_longitudinal_only_trainable(model)
+        self.assertFalse(any(p.requires_grad for p in model.diffusion.parameters()))
+        self.assertTrue(
+            all(p.requires_grad for p in model.longitudinal_trunk.parameters())
+        )
+        self.assertTrue(
+            all(p.requires_grad for p in model.longitudinal_action_head.parameters())
+        )
+        self.assertFalse(
+            any(p.requires_grad for p in model.longitudinal_mode_head.parameters())
+        )
+
+    def test_longitudinal_finetuning_loss_matches_direct_mse(self) -> None:
+        assert torch is not None
+        prediction = torch.tensor([[0.0, 0.5, 0.5]])
+        target = torch.tensor([[1.0, 0.0, 0.5]])
+        loss, components = longitudinal_finetuning_loss(
+            prediction,
+            target,
+            first_action_weight=2.0,
+            chunk_weight=1.0,
+            derivative_weight=0.0,
+        )
+        expected = 2.0 * 1.0 + (1.0 + 0.25) / 3.0
+        self.assertAlmostEqual(float(loss), expected, places=6)
+        self.assertAlmostEqual(float(components["first_action_mse"]), 1.0)
 
 
 if __name__ == "__main__":

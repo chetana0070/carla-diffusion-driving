@@ -340,3 +340,8 @@ deterministic temporal head predicts the longitudinal chunk and an auxiliary cla
 braking, neutral, and acceleration modes. The candidate must pass full validation/test coverage,
 axis and joint RMSE, bias, behavior, longitudinal chunk smoothness, and latency gates before any
 CARLA deployment. See `docs/phase7_3_factorized_policy.md`.
+
+Phase 7.4 freezes the released perception and diffusion-steering path and
+fine-tunes only deterministic longitudinal control against the RMSE promotion
+contract. Test data remains evaluation-only. See
+`docs/phase7_4_longitudinal_finetuning.md`.

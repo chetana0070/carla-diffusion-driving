@@ -38,6 +38,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "factorized_offline_evaluation",
         "factorized_longitudinal_finetuning",
         "phase7_closed_loop_evaluation",
+        "vision_language_action",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -58,6 +59,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     factorized_evaluation = config["factorized_offline_evaluation"]
     factorized_finetuning = config["factorized_longitudinal_finetuning"]
     phase7_closed_loop = config["phase7_closed_loop_evaluation"]
+    vla = config["vision_language_action"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -457,6 +459,45 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         < phase7_closed_loop["maximum_steady_state_latency_ms"]
         <= 1000 / simulator["control_hz"],
         "Phase 7 deployment envelope is invalid",
+    )
+    _require(vla["protocol_version"] == "1.0.0", "unsupported VLA protocol version")
+    _require(
+        vla["language_source"] == "deterministic_route_and_signal_metadata",
+        "Phase 8 preflight must disclose its structured language source",
+    )
+    _require(
+        vla["history_frames"] == camera["history_frames"]
+        and vla["state_input_dimension"] == preprocessing["model_state_dimension"]
+        and vla["image_size"] == camera["model_width"] == camera["model_height"],
+        "VLA observation contract must match preprocessing",
+    )
+    _require(
+        vla["action_horizon"] == policy["action_horizon"]
+        and 1 <= vla["execute_steps"] <= vla["action_horizon"]
+        and simulator["control_hz"] % vla["planner_hz"] == 0
+        and vla["execute_steps"] == simulator["control_hz"] // vla["planner_hz"],
+        "VLA hierarchy must align planner and control rates",
+    )
+    _require(
+        vla["max_instruction_tokens"] >= 4
+        and vla["language_dimension"] > 0
+        and vla["state_hidden_dimension"] > 0
+        and vla["fusion_dimension"] > 0,
+        "VLA model dimensions are invalid",
+    )
+    _require(
+        vla["batch_size"] > 0
+        and vla["data_loader_workers"] >= 0
+        and vla["epochs"] > 0
+        and 0 < vla["learning_rate"] < 1
+        and vla["weight_decay"] >= 0
+        and vla["gradient_clip_norm"] > 0,
+        "VLA training configuration is invalid",
+    )
+    _require(
+        0 <= vla["target_maximum_safety_active_fraction"] < 1
+        and 0 < vla["maximum_planner_latency_ms"] <= 1000 / vla["planner_hz"],
+        "VLA promotion envelope is invalid",
     )
 
     split_sets = [

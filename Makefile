@@ -8,7 +8,9 @@
 	phase7-objective-smoke phase7-factorized-smoke phase7-factorized-train \
 	phase7-factorized-latency phase7-factorized-gate phase7-longitudinal-smoke \
 	phase7-longitudinal-train phase7-factorized-closed-loop \
-	phase7-factorized-validate phase7-factorized-closed-loop-smoke
+	phase7-factorized-validate phase7-factorized-closed-loop-smoke \
+	phase8-vla-prepare phase8-vla-validate phase8-vla-model-smoke \
+	phase8-vla-train phase8-vla-sol-submit
 
 test:
 	python -m unittest discover -s tests -v
@@ -151,3 +153,19 @@ phase7-factorized-closed-loop-smoke:
 		PHASE7_SAVE_VIDEO=1 \
 		PHASE7_VIDEO_DIR=artifacts/evaluations/phase7_factorized_smoke_v210_videos \
 		./scripts/run_phase7_factorized_closed_loop.sh
+
+phase8-vla-prepare:
+	python scripts/prepare_phase8_vla_data.py
+
+phase8-vla-validate:
+	python scripts/validate_phase8_vla_data.py \
+		--report artifacts/evaluations/phase8_vla_data_v220.json
+
+phase8-vla-model-smoke:
+	python scripts/smoke_phase8_vla_model.py
+
+phase8-vla-train:
+	python scripts/train_phase8_vla.py --pretrained-visual-encoder
+
+phase8-vla-sol-submit:
+	sbatch scripts/slurm/train_phase8_vla.sbatch

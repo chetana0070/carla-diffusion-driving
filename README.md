@@ -355,3 +355,14 @@ default, telemetry discloses every replan and deterministic intervention, and
 the launcher owns and closes its CARLA process group. Run
 `make phase7-factorized-closed-loop-smoke` before the promotion suite. See
 `docs/phase7_5_closed_loop_evaluation.md`.
+
+Phase 8.0 introduces a bounded hierarchical vision-language-action preflight.
+Four camera frames, normalized vehicle state, and a deterministic natural-language
+instruction condition a slow 2 Hz planner that predicts a 16-step action chunk.
+Only five actions are executed before replanning; the existing 10 Hz controller and
+Phase 6 deterministic safety/liveness arbitration remain final authority. The initial
+language labels are derived from route-command and traffic-signal metadata, so this
+milestone validates language conditioning and deployment contracts but does not claim
+open-vocabulary grounding. Run `make phase8-vla-prepare`,
+`make phase8-vla-validate`, and `make phase8-vla-model-smoke` before training. See
+`docs/phase8_vla_preflight.md`.

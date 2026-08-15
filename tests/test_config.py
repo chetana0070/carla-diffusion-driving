@@ -54,6 +54,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(
             config["phase7_closed_loop_evaluation"]["deployment_noise_seed"], 17
         )
+        self.assertEqual(config["vision_language_action"]["planner_hz"], 2)
+        self.assertEqual(config["vision_language_action"]["execute_steps"], 5)
+        self.assertEqual(config["vision_language_action"]["action_horizon"], 16)
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

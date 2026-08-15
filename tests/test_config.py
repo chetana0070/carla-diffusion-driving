@@ -46,6 +46,14 @@ class ConfigTests(unittest.TestCase):
             len(config["factorized_offline_evaluation"]["candidate_noise_seeds"]),
             3,
         )
+        self.assertEqual(
+            config["phase7_closed_loop_evaluation"]["protocol_version"],
+            "1.0.0",
+        )
+        self.assertEqual(config["phase7_closed_loop_evaluation"]["episodes"], 3)
+        self.assertEqual(
+            config["phase7_closed_loop_evaluation"]["deployment_noise_seed"], 17
+        )
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

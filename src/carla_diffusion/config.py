@@ -37,6 +37,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "factorized_policy",
         "factorized_offline_evaluation",
         "factorized_longitudinal_finetuning",
+        "phase7_closed_loop_evaluation",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -56,6 +57,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     factorized = config["factorized_policy"]
     factorized_evaluation = config["factorized_offline_evaluation"]
     factorized_finetuning = config["factorized_longitudinal_finetuning"]
+    phase7_closed_loop = config["phase7_closed_loop_evaluation"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -407,6 +409,54 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         and factorized_finetuning["chunk_mse_weight"] >= 0
         and factorized_finetuning["derivative_mse_weight"] >= 0,
         "factorized longitudinal fine-tuning objective is invalid",
+    )
+    _require(
+        phase7_closed_loop["protocol_version"] == "1.0.0",
+        "unsupported Phase 7 closed-loop protocol version",
+    )
+    _require(
+        isinstance(phase7_closed_loop["checkpoint_sha256"], str)
+        and len(phase7_closed_loop["checkpoint_sha256"]) == 64,
+        "Phase 7 closed-loop checkpoint digest must be SHA-256",
+    )
+    _require(
+        phase7_closed_loop["deployment_noise_seed"]
+        in factorized_evaluation["candidate_noise_seeds"],
+        "Phase 7 deployment noise seed must come from the offline candidates",
+    )
+    _require(
+        phase7_closed_loop["episodes"] >= 3
+        and phase7_closed_loop["ticks_per_episode"] > 0
+        and phase7_closed_loop["background_vehicles"] >= 0,
+        "Phase 7 closed-loop cardinality is invalid",
+    )
+    _require(
+        0 < phase7_closed_loop["minimum_mean_route_progress_fraction"] <= 1
+        and phase7_closed_loop["minimum_mean_distance_m"] > 0
+        and 0 <= phase7_closed_loop["maximum_stationary_fraction"] < 1,
+        "Phase 7 progress and liveness thresholds are invalid",
+    )
+    _require(
+        all(
+            phase7_closed_loop[name] >= 0
+            for name in (
+                "maximum_collisions",
+                "maximum_lane_invasions",
+                "maximum_red_light_violations",
+                "maximum_no_progress_terminations",
+            )
+        ),
+        "Phase 7 safety-event budgets must be non-negative",
+    )
+    _require(
+        phase7_closed_loop["maximum_speed_mps"] > 0
+        and phase7_closed_loop["maximum_lane_offset_m"] > 0
+        and phase7_closed_loop["cold_start_ticks"] >= 1
+        and phase7_closed_loop["maximum_cold_start_latency_ms"] > 0
+        and 0
+        < phase7_closed_loop["maximum_steady_state_latency_ms"]
+        <= 1000 / simulator["control_hz"],
+        "Phase 7 deployment envelope is invalid",
     )
 
     split_sets = [

@@ -337,6 +337,7 @@ def route_command(
 
 def evaluate_episode(
     *,
+    client: carla.Client,
     world: carla.World,
     traffic_manager: carla.TrafficManager,
     policy: PolicyRuntime,
@@ -633,17 +634,45 @@ def evaluate_episode(
     finally:
         if video_writer is not None:
             video_writer.close()
+        client.set_timeout(5.0)
+        sensor_stop_errors: list[str] = []
         for actor in reversed(actors):
-            try:
-                if "sensor" in actor.type_id:
+            if actor.type_id.startswith("sensor."):
+                try:
                     actor.stop()
-                actor.destroy()
-            except RuntimeError:
-                pass
+                except RuntimeError as error:
+                    sensor_stop_errors.append(str(error))
+        if sensor_stop_errors:
+            print(
+                "WARNING: CARLA sensor shutdown reported "
+                f"{len(sensor_stop_errors)} error(s): {sensor_stop_errors[0]}",
+                file=sys.stderr,
+                flush=True,
+            )
         try:
+            responses = client.apply_batch_sync(
+                [carla.command.DestroyActor(actor.id) for actor in reversed(actors)],
+                False,
+            )
+            cleanup_errors = [
+                response.error for response in responses if response.has_error()
+            ]
+            if cleanup_errors:
+                print(
+                    "WARNING: CARLA actor batch cleanup reported "
+                    f"{len(cleanup_errors)} error(s): {cleanup_errors[0]}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             world.tick()
-        except RuntimeError:
-            pass
+        except RuntimeError as error:
+            print(
+                f"WARNING: bounded CARLA actor cleanup failed: {error}",
+                file=sys.stderr,
+                flush=True,
+            )
+        finally:
+            client.set_timeout(120.0)
 
 
 def main() -> int:
@@ -696,6 +725,7 @@ def main() -> int:
         for episode_number in range(episodes):
             print(f"Evaluating closed-loop episode {episode_number + 1}/{episodes}", flush=True)
             report = evaluate_episode(
+                client=client,
                 world=world,
                 traffic_manager=traffic_manager,
                 policy=policy,
@@ -713,11 +743,23 @@ def main() -> int:
             episode_reports.append(report)
             print(json.dumps(report), flush=True)
     finally:
+        client.set_timeout(5.0)
         try:
             traffic_manager.set_synchronous_mode(False)
-        except RuntimeError:
-            pass
-        world.apply_settings(original_settings)
+        except RuntimeError as error:
+            print(
+                f"WARNING: bounded Traffic Manager cleanup failed: {error}",
+                file=sys.stderr,
+                flush=True,
+            )
+        try:
+            world.apply_settings(original_settings)
+        except RuntimeError as error:
+            print(
+                f"WARNING: bounded world-settings cleanup failed: {error}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     aggregate = aggregate_episode_reports(episode_reports)
     all_p95 = [

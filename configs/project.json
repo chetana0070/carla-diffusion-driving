@@ -240,6 +240,27 @@
     "chunk_mse_weight": 1.0,
     "derivative_mse_weight": 0.1
   },
+  "phase7_closed_loop_evaluation": {
+    "protocol_version": "1.0.0",
+    "checkpoint_sha256": "5d3191daef225b49dd5944e4dfefe20211c35af85731aeb440e831ffc0e81749",
+    "deployment_noise_seed": 17,
+    "seed": 20260901,
+    "episodes": 3,
+    "ticks_per_episode": 300,
+    "background_vehicles": 8,
+    "minimum_mean_route_progress_fraction": 0.09,
+    "minimum_mean_distance_m": 80.0,
+    "maximum_collisions": 0,
+    "maximum_lane_invasions": 0,
+    "maximum_red_light_violations": 0,
+    "maximum_no_progress_terminations": 0,
+    "maximum_stationary_fraction": 0.6,
+    "maximum_speed_mps": 5.0,
+    "maximum_lane_offset_m": 1.5,
+    "cold_start_ticks": 1,
+    "maximum_cold_start_latency_ms": 200.0,
+    "maximum_steady_state_latency_ms": 100.0
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,

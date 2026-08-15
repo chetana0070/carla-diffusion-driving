@@ -6,7 +6,9 @@
 	phase6-residual-closed-loop phase6-safety-smoke phase6-liveness-smoke \
 	phase7-model-smoke phase7-train-smoke phase7-latency phase7-offline-gate \
 	phase7-objective-smoke phase7-factorized-smoke phase7-factorized-train \
-	phase7-factorized-latency phase7-factorized-gate
+	phase7-factorized-latency phase7-factorized-gate phase7-longitudinal-smoke \
+	phase7-longitudinal-train phase7-factorized-closed-loop \
+	phase7-factorized-validate phase7-factorized-closed-loop-smoke
 
 test:
 	python -m unittest discover -s tests -v
@@ -134,3 +136,18 @@ phase7-longitudinal-train:
 	python scripts/finetune_factorized_longitudinal.py \
 		--initial-checkpoint artifacts/checkpoints/phase7_factorized_v191/best.pt \
 		--output-dir artifacts/checkpoints/phase7_factorized_longitudinal_v200
+
+phase7-factorized-closed-loop:
+	./scripts/run_phase7_factorized_closed_loop.sh
+
+phase7-factorized-validate:
+	python scripts/validate_phase7_factorized_closed_loop.py
+
+phase7-factorized-closed-loop-smoke:
+	CARLA_RENDER_MODE=live PHASE7_SEED=20260901 PHASE7_EPISODES=1 \
+		PHASE7_TICKS_PER_EPISODE=100 PHASE7_BACKGROUND_VEHICLES=2 \
+		PHASE7_REPORT=artifacts/evaluations/phase7_factorized_smoke_v210.json \
+		PHASE7_TELEMETRY_DIR=artifacts/evaluations/phase7_factorized_smoke_v210_telemetry \
+		PHASE7_SAVE_VIDEO=1 \
+		PHASE7_VIDEO_DIR=artifacts/evaluations/phase7_factorized_smoke_v210_videos \
+		./scripts/run_phase7_factorized_closed_loop.sh

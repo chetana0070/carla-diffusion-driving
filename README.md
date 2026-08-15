@@ -345,3 +345,13 @@ Phase 7.4 freezes the released perception and diffusion-steering path and
 fine-tunes only deterministic longitudinal control against the RMSE promotion
 contract. Test data remains evaluation-only. See
 `docs/phase7_4_longitudinal_finetuning.md`.
+
+Phase 7.5 deploys the promoted `v2.0.0` factorized checkpoint into the frozen
+three-seed CARLA contract. The diffusion branch replans steering chunks every
+four control ticks, the deterministic head supplies longitudinal chunks, and
+the previously validated Phase 6 safety/liveness arbitration remains the final
+authority on every tick. Live rendering is the default, videos are enabled by
+default, telemetry discloses every replan and deterministic intervention, and
+the launcher owns and closes its CARLA process group. Run
+`make phase7-factorized-closed-loop-smoke` before the promotion suite. See
+`docs/phase7_5_closed_loop_evaluation.md`.

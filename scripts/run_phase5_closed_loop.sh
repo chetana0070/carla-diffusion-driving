@@ -16,6 +16,7 @@ TELEMETRY_DIR="${PHASE5_TELEMETRY_DIR:-artifacts/evaluations/phase5_telemetry}"
 SAVE_VIDEO="${PHASE5_SAVE_VIDEO:-0}"
 VIDEO_DIR="${PHASE5_VIDEO_DIR:-artifacts/evaluations/phase5_videos}"
 EVALUATOR="${PHASE5_EVALUATOR:-scripts/evaluate_temporal_bc_closed_loop.py}"
+EVALUATION_LABEL="${PHASE5_EVALUATION_LABEL:-Phase 5 temporal}"
 SERVER_PID=""
 CLIENT_ARGS=()
 
@@ -63,7 +64,12 @@ elif [[ "$CONTROLLER" != "policy" ]]; then
 fi
 
 mkdir -p "$(dirname "$SERVER_LOG")"
-SERVER_ARGS=(-quality-level=Low -carla-rpc-port=2000)
+SERVER_ARGS=(
+    -quality-level=Low
+    -carla-rpc-port=2000
+    -stdout
+    -FullStdOutLogOutput
+)
 if [[ "$RENDER_MODE" == "live" ]]; then
     if [[ -z "${DISPLAY:-}" ]]; then
         echo "FAIL: live rendering requires an active graphical DISPLAY."
@@ -71,10 +77,10 @@ if [[ "$RENDER_MODE" == "live" ]]; then
     fi
     SERVER_ARGS+=(-windowed -ResX=1280 -ResY=720)
     CLIENT_ARGS+=(--spectator-follow)
-    echo "Starting live CARLA temporal closed-loop evaluation"
+    echo "Starting live CARLA ${EVALUATION_LABEL} closed-loop evaluation"
 elif [[ "$RENDER_MODE" == "offscreen" ]]; then
     SERVER_ARGS+=(-RenderOffScreen)
-    echo "Starting off-screen CARLA temporal closed-loop evaluation"
+    echo "Starting off-screen CARLA ${EVALUATION_LABEL} closed-loop evaluation"
 else
     echo "FAIL: CARLA_RENDER_MODE must be 'live' or 'offscreen'."
     exit 1
@@ -152,4 +158,4 @@ python "$EVALUATOR" \
     --telemetry-dir "$TELEMETRY_DIR" \
     "${CLIENT_ARGS[@]}"
 
-echo "Phase 5 temporal closed-loop evaluation completed."
+echo "${EVALUATION_LABEL} closed-loop evaluation completed."

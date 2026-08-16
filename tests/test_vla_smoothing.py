@@ -12,6 +12,7 @@ from carla_diffusion.vla_smoothing import (
     apply_checkpoint_smoother,
     causal_steering_smoother,
     checkpoint_smoother_alpha,
+    select_pareto_candidate,
     select_steering_smoothing,
 )
 
@@ -75,6 +76,37 @@ class VLASmoothingTests(unittest.TestCase):
     def test_invalid_alpha_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             causal_steering_smoother(torch.zeros(1, 2, 2), 0.0)
+
+    def test_pareto_selection_prefers_smoothness_within_accuracy_band(self) -> None:
+        candidates = [
+            {
+                "alpha": 0.5,
+                "eligible": True,
+                "steering_smoothness_ratio": 1.13,
+                "full_chunk_steering_rmse": 0.050099,
+            },
+            {
+                "alpha": 0.4,
+                "eligible": True,
+                "steering_smoothness_ratio": 0.99,
+                "full_chunk_steering_rmse": 0.050172,
+            },
+            {
+                "alpha": 0.3,
+                "eligible": True,
+                "steering_smoothness_ratio": 0.82,
+                "full_chunk_steering_rmse": 0.050444,
+            },
+        ]
+        selected, eligible = select_pareto_candidate(
+            candidates,
+            rmse_equivalence_tolerance_fraction=0.005,
+        )
+        self.assertIsNotNone(selected)
+        assert selected is not None
+        self.assertEqual(selected["alpha"], 0.4)
+        equivalent = [candidate for candidate in eligible if candidate["accuracy_equivalent"]]
+        self.assertEqual([candidate["alpha"] for candidate in equivalent], [0.5, 0.4])
 
 
 if __name__ == "__main__":

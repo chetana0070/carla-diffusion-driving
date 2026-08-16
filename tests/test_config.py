@@ -90,6 +90,19 @@ class ConfigTests(unittest.TestCase):
             ],
             config["vla_offline_evaluation"]["maximum_chunk_smoothness_ratio"],
         )
+        self.assertEqual(
+            config["vla_pareto_smoothing"]["candidate_alphas"],
+            config["vla_steering_smoothing"]["candidate_alphas"],
+        )
+        self.assertEqual(
+            config["vla_pareto_smoothing"][
+                "rmse_equivalence_tolerance_fraction"
+            ],
+            0.005,
+        )
+        self.assertTrue(
+            config["vla_pareto_smoothing"]["requires_fresh_holdout"]
+        )
         self.assertGreaterEqual(
             config["vla_offline_evaluation"]["maximum_relative_rmse"], 1
         )

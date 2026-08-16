@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from copy import deepcopy
 from typing import Any
 
 from .diffusion_evaluation import promotion_decision, summarize_action_pairs
@@ -89,3 +90,22 @@ def vla_promotion_decision(
     decision["gate_passed"] = not decision["failures"]
     decision["chunk_smoothness_ratio"] = ratios
     return decision
+
+
+def apply_fresh_holdout_governance(
+    decision: dict[str, Any],
+    *,
+    fresh_holdout_required: bool,
+    fresh_holdout_passed: bool,
+) -> dict[str, Any]:
+    """Separate technical regression success from unbiased promotion authority."""
+    governed = deepcopy(decision)
+    governed["technical_gate_passed"] = bool(decision["gate_passed"])
+    holdout_check = not fresh_holdout_required or fresh_holdout_passed
+    governed["checks"]["fresh_holdout"] = holdout_check
+    governed["failures"] = [
+        name for name, passed in governed["checks"].items() if not passed
+    ]
+    governed["gate_passed"] = not governed["failures"]
+    governed["fresh_holdout_required"] = fresh_holdout_required
+    return governed

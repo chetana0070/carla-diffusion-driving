@@ -395,3 +395,12 @@ steering RMSE degradation. The unchanged test gate and latency benchmark both ex
 checkpoint-bound transformation. Run `make phase8-vla-smoother-calibrate`, then
 `make phase8-vla-smoother-latency` and `make phase8-vla-smoother-gate`. See
 `docs/phase8_3_validation_calibrated_smoothing.md`.
+
+Phase 8.4 replaces least-invasive alpha selection with a validation-only Pareto rule. Among
+eligible candidates within 0.5% of the best validation full-chunk steering RMSE, it selects
+the candidate with the strongest smoothness margin. This changes selection policy, not the
+candidate grid, model weights, or acceptance thresholds. Because the original test split was
+already observed during Phase 8.3, its rerun is classified as a development regression and
+cannot authorize promotion; a fresh route-level holdout is mandatory before CARLA. Run
+`make phase8-vla-pareto-calibrate`, `make phase8-vla-pareto-latency`, and
+`make phase8-vla-pareto-development-gate`. See `docs/phase8_4_pareto_smoothing.md`.

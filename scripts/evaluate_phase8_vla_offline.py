@@ -28,6 +28,7 @@ from carla_diffusion.diffusion_evaluation import (
 )
 from carla_diffusion.vla_dataset import VLAWindowDataset
 from carla_diffusion.vla_evaluation import (
+    apply_fresh_holdout_governance,
     summarize_instruction_slices,
     vla_promotion_decision,
 )
@@ -239,10 +240,26 @@ def main() -> int:
         baseline_provenance_passed=baseline_provenance,
         instruction_slice_coverage_passed=slice_coverage,
     )
+    deployment_transform = checkpoint.get("deployment_transform")
+    requires_fresh_holdout = bool(
+        isinstance(deployment_transform, dict)
+        and deployment_transform.get("requires_fresh_holdout")
+    )
+    promotion = apply_fresh_holdout_governance(
+        promotion,
+        fresh_holdout_required=requires_fresh_holdout,
+        fresh_holdout_passed=False,
+    )
     report = {
         "status": "passed",
         "model_type": str(checkpoint["model_type"]),
         "promotion_gate_passed": promotion["gate_passed"],
+        "technical_gate_passed": promotion["technical_gate_passed"],
+        "evaluation_role": (
+            "previously_observed_development_regression"
+            if requires_fresh_holdout
+            else "frozen_test_promotion_gate"
+        ),
         "claim_boundary": (
             "Closed-vocabulary deterministic instructions derived from route and signal "
             "metadata; no open-vocabulary or closed-loop claim."
@@ -250,7 +267,7 @@ def main() -> int:
         "checkpoint": str(checkpoint_path),
         "checkpoint_sha256": checkpoint_sha256,
         "checkpoint_epoch": int(checkpoint["epoch"]),
-        "deployment_transform": checkpoint.get("deployment_transform"),
+        "deployment_transform": deployment_transform,
         "baseline_report": str(args.baseline_report.resolve()),
         "device": str(device),
         "dataset_sizes": {

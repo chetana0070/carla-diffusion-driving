@@ -41,6 +41,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "vision_language_action",
         "vla_corrective_finetuning",
         "vla_steering_smoothing",
+        "vla_pareto_smoothing",
         "vla_offline_evaluation",
         "evaluation",
     }
@@ -65,6 +66,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     vla = config["vision_language_action"]
     vla_finetuning = config["vla_corrective_finetuning"]
     vla_smoothing = config["vla_steering_smoothing"]
+    vla_pareto = config["vla_pareto_smoothing"]
     vla_evaluation = config["vla_offline_evaluation"]
     evaluation = config["evaluation"]
 
@@ -597,6 +599,32 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         ]
         <= 1,
         "VLA smoothing calibration limits are invalid",
+    )
+    _require(
+        vla_pareto["protocol_version"] == "1.0.0"
+        and vla_pareto["method"] == vla_smoothing["method"]
+        and vla_pareto["calibration_split"] == "validation"
+        and vla_pareto["preserve_first_action"] is True
+        and vla_pareto["requires_fresh_holdout"] is True,
+        "unsupported VLA Pareto smoothing contract",
+    )
+    _require(
+        isinstance(vla_pareto["base_checkpoint_sha256"], str)
+        and len(vla_pareto["base_checkpoint_sha256"]) == 64
+        and isinstance(vla_pareto["prior_smoothed_checkpoint_sha256"], str)
+        and len(vla_pareto["prior_smoothed_checkpoint_sha256"]) == 64,
+        "VLA Pareto checkpoint digests must be SHA-256",
+    )
+    _require(
+        vla_pareto["candidate_alphas"] == vla_smoothing["candidate_alphas"]
+        and vla_pareto["target_maximum_steering_smoothness_ratio"]
+        == vla_smoothing["target_maximum_steering_smoothness_ratio"]
+        and vla_pareto["maximum_full_chunk_steering_rmse_degradation_fraction"]
+        == vla_smoothing[
+            "maximum_full_chunk_steering_rmse_degradation_fraction"
+        ]
+        and 0 < vla_pareto["rmse_equivalence_tolerance_fraction"] <= 0.05,
+        "VLA Pareto selection must preserve the frozen calibration surface",
     )
     _require(
         vla_evaluation["expected_validation_samples"] > 0

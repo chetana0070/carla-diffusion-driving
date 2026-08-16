@@ -7,6 +7,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from carla_diffusion.diffusion_evaluation import summarize_action_pairs
 from carla_diffusion.vla_evaluation import (
+    apply_fresh_holdout_governance,
     summarize_instruction_slices,
     vla_promotion_decision,
 )
@@ -59,6 +60,16 @@ class VLAEvaluationTests(unittest.TestCase):
         )
         self.assertEqual(summary["route_command"]["left"]["samples"], 2)
         self.assertEqual(summary["traffic_light_state"]["red"]["samples"], 1)
+
+    def test_observed_test_cannot_authorize_promotion(self) -> None:
+        governed = apply_fresh_holdout_governance(
+            self.decision(),
+            fresh_holdout_required=True,
+            fresh_holdout_passed=False,
+        )
+        self.assertTrue(governed["technical_gate_passed"])
+        self.assertFalse(governed["gate_passed"])
+        self.assertEqual(governed["failures"], ["fresh_holdout"])
 
 
 if __name__ == "__main__":

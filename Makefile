@@ -15,7 +15,8 @@
 	phase8-vla-corrective-train phase8-vla-corrective-sol-submit \
 	phase8-vla-corrective-latency phase8-vla-corrective-gate \
 	phase8-vla-smoother-calibrate phase8-vla-smoother-latency \
-	phase8-vla-smoother-gate
+	phase8-vla-smoother-gate phase8-vla-pareto-calibrate \
+	phase8-vla-pareto-latency phase8-vla-pareto-development-gate
 
 test:
 	python -m unittest discover -s tests -v
@@ -230,3 +231,23 @@ phase8-vla-smoother-gate:
 		--training-report artifacts/checkpoints/phase8_vla_smoothed_v250/report.json \
 		--latency-report artifacts/evaluations/phase8_vla_smoothed_latency_v250.json \
 		--output artifacts/evaluations/phase8_vla_smoothed_gate_v250.json
+
+phase8-vla-pareto-calibrate:
+	python scripts/calibrate_phase8_vla_smoother.py \
+		--selection-strategy pareto_robust \
+		--base-checkpoint artifacts/checkpoints/phase8_vla_corrective_v240/best.pt \
+		--base-training-report artifacts/checkpoints/phase8_vla_corrective_v240/report.json \
+		--prior-gate-report artifacts/evaluations/phase8_vla_smoothed_gate_v250.json \
+		--output-dir artifacts/checkpoints/phase8_vla_pareto_v260
+
+phase8-vla-pareto-latency:
+	python scripts/benchmark_phase8_vla_latency.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_pareto_v260/best.pt \
+		> artifacts/evaluations/phase8_vla_pareto_latency_v260.json
+
+phase8-vla-pareto-development-gate:
+	python scripts/evaluate_phase8_vla_offline.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_pareto_v260/best.pt \
+		--training-report artifacts/checkpoints/phase8_vla_pareto_v260/report.json \
+		--latency-report artifacts/evaluations/phase8_vla_pareto_latency_v260.json \
+		--output artifacts/evaluations/phase8_vla_pareto_development_gate_v260.json

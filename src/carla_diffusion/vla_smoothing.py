@@ -149,3 +149,76 @@ def select_steering_smoothing(
         ),
         "candidates": candidates,
     }
+
+
+def select_pareto_candidate(
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    rmse_equivalence_tolerance_fraction: float,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Select maximum smoothness margin among accuracy-equivalent candidates."""
+    if not 0 <= rmse_equivalence_tolerance_fraction <= 1:
+        raise ValueError("RMSE equivalence tolerance must be in [0, 1]")
+    eligible = [dict(candidate) for candidate in candidates if candidate["eligible"]]
+    if not eligible:
+        return None, []
+    best_rmse = min(float(candidate["full_chunk_steering_rmse"]) for candidate in eligible)
+    cutoff = best_rmse * (1.0 + rmse_equivalence_tolerance_fraction)
+    frontier: list[dict[str, Any]] = []
+    for candidate in eligible:
+        equivalent = float(candidate["full_chunk_steering_rmse"]) <= cutoff
+        candidate["accuracy_equivalent"] = equivalent
+        candidate["accuracy_equivalence_cutoff_rmse"] = cutoff
+        if equivalent:
+            frontier.append(candidate)
+    selected = min(
+        frontier,
+        key=lambda candidate: (
+            float(candidate["steering_smoothness_ratio"]),
+            float(candidate["full_chunk_steering_rmse"]),
+            -float(candidate["alpha"]),
+        ),
+    )
+    return selected, eligible
+
+
+def select_pareto_steering_smoothing(
+    predicted_chunks: Sequence[Sequence[Sequence[float]]],
+    target_chunks: Sequence[Sequence[Sequence[float]]],
+    candidate_alphas: Sequence[float],
+    *,
+    target_maximum_smoothness_ratio: float,
+    maximum_full_chunk_steering_rmse_degradation_fraction: float,
+    rmse_equivalence_tolerance_fraction: float,
+) -> dict[str, Any]:
+    """Apply a validation-only accuracy/smoothness Pareto selection rule."""
+    calibration = select_steering_smoothing(
+        predicted_chunks,
+        target_chunks,
+        candidate_alphas,
+        target_maximum_smoothness_ratio=target_maximum_smoothness_ratio,
+        maximum_full_chunk_steering_rmse_degradation_fraction=(
+            maximum_full_chunk_steering_rmse_degradation_fraction
+        ),
+    )
+    selected, eligible = select_pareto_candidate(
+        calibration["candidates"],
+        rmse_equivalence_tolerance_fraction=rmse_equivalence_tolerance_fraction,
+    )
+    selected_alpha = None if selected is None else selected["alpha"]
+    calibration.update(
+        {
+            "status": "passed" if selected is not None else "failed",
+            "selection_rule": (
+                "lowest smoothness ratio among validation candidates within the "
+                "frozen RMSE-equivalence tolerance"
+            ),
+            "selected_alpha": selected_alpha,
+            "rmse_equivalence_tolerance_fraction": (
+                rmse_equivalence_tolerance_fraction
+            ),
+            "eligible_candidates": eligible,
+            "selected_candidate": selected,
+        }
+    )
+    return calibration

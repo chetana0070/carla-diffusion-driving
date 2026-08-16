@@ -39,6 +39,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "factorized_longitudinal_finetuning",
         "phase7_closed_loop_evaluation",
         "vision_language_action",
+        "vla_corrective_finetuning",
         "vla_offline_evaluation",
         "evaluation",
     }
@@ -61,6 +62,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     factorized_finetuning = config["factorized_longitudinal_finetuning"]
     phase7_closed_loop = config["phase7_closed_loop_evaluation"]
     vla = config["vision_language_action"]
+    vla_finetuning = config["vla_corrective_finetuning"]
     vla_evaluation = config["vla_offline_evaluation"]
     evaluation = config["evaluation"]
 
@@ -500,6 +502,66 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         0 <= vla["target_maximum_safety_active_fraction"] < 1
         and 0 < vla["maximum_planner_latency_ms"] <= 1000 / vla["planner_hz"],
         "VLA promotion envelope is invalid",
+    )
+    _require(
+        vla_finetuning["protocol_version"] == "1.0.0",
+        "unsupported VLA corrective fine-tuning protocol version",
+    )
+    _require(
+        isinstance(vla_finetuning["initial_checkpoint_sha256"], str)
+        and len(vla_finetuning["initial_checkpoint_sha256"]) == 64,
+        "VLA corrective initial checkpoint digest must be SHA-256",
+    )
+    _require(
+        vla_finetuning["batch_size"] > 0
+        and vla_finetuning["data_loader_workers"] >= 0
+        and vla_finetuning["epochs"] > 0
+        and 0 < vla_finetuning["learning_rate"] < 1
+        and vla_finetuning["weight_decay"] >= 0
+        and vla_finetuning["gradient_clip_norm"] > 0
+        and vla_finetuning["early_stopping_patience"] > 0
+        and vla_finetuning["minimum_improvement"] >= 0,
+        "VLA corrective optimizer configuration is invalid",
+    )
+    corrective_loss_names = (
+        "chunk_steering_mse_weight",
+        "chunk_longitudinal_mse_weight",
+        "first_action_steering_mse_weight",
+        "first_action_longitudinal_mse_weight",
+        "steering_derivative_mse_weight",
+        "longitudinal_derivative_mse_weight",
+        "longitudinal_bias_loss_weight",
+    )
+    _require(
+        all(vla_finetuning[name] >= 0 for name in corrective_loss_names)
+        and vla_finetuning["chunk_steering_mse_weight"] > 0
+        and vla_finetuning["chunk_longitudinal_mse_weight"] > 0,
+        "VLA corrective objective weights are invalid",
+    )
+    _require(
+        vla_finetuning["selection_bias_violation_weight"] >= 0
+        and vla_finetuning["selection_smoothness_violation_weight"] >= 0
+        and 0 < vla_finetuning["target_maximum_absolute_longitudinal_bias"]
+        <= vla_evaluation["maximum_absolute_longitudinal_bias"]
+        and 1 <= vla_finetuning["target_maximum_steering_smoothness_ratio"]
+        <= vla_evaluation["maximum_chunk_smoothness_ratio"],
+        "VLA corrective selection targets must preserve promotion headroom",
+    )
+    expected_route_commands = {"follow_lane", "left", "right", "straight"}
+    expected_traffic_lights = {"none", "green", "yellow", "red", "unknown"}
+    _require(
+        set(vla_finetuning["route_command_weights"]) == expected_route_commands
+        and set(vla_finetuning["traffic_light_weights"])
+        == expected_traffic_lights
+        and all(
+            weight > 0
+            for weights in (
+                vla_finetuning["route_command_weights"],
+                vla_finetuning["traffic_light_weights"],
+            )
+            for weight in weights.values()
+        ),
+        "VLA corrective condition weights are invalid",
     )
     _require(
         vla_evaluation["expected_validation_samples"] > 0

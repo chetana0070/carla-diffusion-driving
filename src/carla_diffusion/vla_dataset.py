@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,8 @@ class VLAWindowDataset(Dataset[dict[str, torch.Tensor]]):
         normalized_state_clip: float,
         augment: bool = False,
         dataset_root: str | Path | None = None,
+        route_command_weights: Mapping[str, float] | None = None,
+        traffic_light_weights: Mapping[str, float] | None = None,
     ) -> None:
         if split not in {"train", "validation", "test"}:
             raise ValueError(f"invalid split: {split}")
@@ -53,6 +56,12 @@ class VLAWindowDataset(Dataset[dict[str, torch.Tensor]]):
         self.state_mean = torch.tensor(normalization["state_mean"], dtype=torch.float32)
         self.state_std = torch.tensor(normalization["state_std"], dtype=torch.float32)
         self.normalized_state_clip = normalized_state_clip
+        self.route_command_weights = dict(route_command_weights or {})
+        self.traffic_light_weights = dict(traffic_light_weights or {})
+        if any(weight <= 0 for weight in self.route_command_weights.values()):
+            raise ValueError("route-command weights must be positive")
+        if any(weight <= 0 for weight in self.traffic_light_weights.values()):
+            raise ValueError("traffic-light weights must be positive")
         self.to_float = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
         transforms: list[Any] = [v2.Resize((image_size, image_size), antialias=True)]
         if augment:
@@ -81,6 +90,9 @@ class VLAWindowDataset(Dataset[dict[str, torch.Tensor]]):
         )
         if not bool(torch.all(torch.isfinite(states))):
             raise ValueError(f"non-finite VLA state at dataset index {index}")
+        condition_weight = self.route_command_weights.get(
+            str(row["route_command"]), 1.0
+        ) * self.traffic_light_weights.get(str(row["traffic_light_state"]), 1.0)
         return {
             "images": images,
             "state_history": states,
@@ -92,6 +104,7 @@ class VLAWindowDataset(Dataset[dict[str, torch.Tensor]]):
             ),
             "target": torch.tensor(row["action_chunk_target"], dtype=torch.float32),
             "weight": torch.tensor(float(row["sample_weight"]), dtype=torch.float32),
+            "condition_weight": torch.tensor(condition_weight, dtype=torch.float32),
         }
 
 

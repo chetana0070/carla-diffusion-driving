@@ -58,6 +58,27 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["vision_language_action"]["execute_steps"], 5)
         self.assertEqual(config["vision_language_action"]["action_horizon"], 16)
         self.assertEqual(config["vla_offline_evaluation"]["expected_test_samples"], 582)
+        self.assertTrue(
+            config["vla_corrective_finetuning"]["freeze_visual_encoder"]
+        )
+        self.assertEqual(
+            config["vla_corrective_finetuning"]["initial_checkpoint_sha256"],
+            "54eea641db4fda22822dafd718e1051b66313b0ae63e789d9b4d26b5e2e44d41",
+        )
+        self.assertLess(
+            config["vla_corrective_finetuning"][
+                "target_maximum_absolute_longitudinal_bias"
+            ],
+            config["vla_offline_evaluation"][
+                "maximum_absolute_longitudinal_bias"
+            ],
+        )
+        self.assertLess(
+            config["vla_corrective_finetuning"][
+                "target_maximum_steering_smoothness_ratio"
+            ],
+            config["vla_offline_evaluation"]["maximum_chunk_smoothness_ratio"],
+        )
         self.assertGreaterEqual(
             config["vla_offline_evaluation"]["maximum_relative_rmse"], 1
         )

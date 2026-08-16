@@ -11,7 +11,9 @@
 	phase7-factorized-validate phase7-factorized-closed-loop-smoke \
 	phase8-vla-prepare phase8-vla-validate phase8-vla-model-smoke \
 	phase8-vla-train phase8-vla-sol-submit phase8-vla-latency \
-	phase8-vla-offline-gate
+	phase8-vla-offline-gate phase8-vla-corrective-smoke \
+	phase8-vla-corrective-train phase8-vla-corrective-sol-submit \
+	phase8-vla-corrective-latency phase8-vla-corrective-gate
 
 test:
 	python -m unittest discover -s tests -v
@@ -182,3 +184,29 @@ phase8-vla-offline-gate:
 		--training-report artifacts/checkpoints/phase8_vla_v220/report.json \
 		--latency-report artifacts/evaluations/phase8_vla_latency_v230.json \
 		--output artifacts/evaluations/phase8_vla_offline_gate_v230.json
+
+phase8-vla-corrective-smoke:
+	python scripts/finetune_phase8_vla.py \
+		--smoke --allow-cpu --workers 0 \
+		--initial-checkpoint artifacts/checkpoints/phase8_vla_v220/best.pt \
+		--output-dir artifacts/checkpoints/phase8_vla_corrective_smoke_v240
+
+phase8-vla-corrective-train:
+	python scripts/finetune_phase8_vla.py \
+		--initial-checkpoint artifacts/checkpoints/phase8_vla_v220/best.pt \
+		--output-dir artifacts/checkpoints/phase8_vla_corrective_v240
+
+phase8-vla-corrective-sol-submit:
+	sbatch scripts/slurm/finetune_phase8_vla.sbatch
+
+phase8-vla-corrective-latency:
+	python scripts/benchmark_phase8_vla_latency.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_corrective_v240/best.pt \
+		> artifacts/evaluations/phase8_vla_corrective_latency_v240.json
+
+phase8-vla-corrective-gate:
+	python scripts/evaluate_phase8_vla_offline.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_corrective_v240/best.pt \
+		--training-report artifacts/checkpoints/phase8_vla_corrective_v240/report.json \
+		--latency-report artifacts/evaluations/phase8_vla_corrective_latency_v240.json \
+		--output artifacts/evaluations/phase8_vla_corrective_gate_v240.json

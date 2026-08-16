@@ -284,6 +284,43 @@
     "target_maximum_safety_active_fraction": 0.6,
     "maximum_planner_latency_ms": 500.0
   },
+  "vla_corrective_finetuning": {
+    "protocol_version": "1.0.0",
+    "initial_checkpoint_sha256": "54eea641db4fda22822dafd718e1051b66313b0ae63e789d9b4d26b5e2e44d41",
+    "batch_size": 8,
+    "data_loader_workers": 4,
+    "epochs": 20,
+    "learning_rate": 0.00003,
+    "weight_decay": 0.0001,
+    "gradient_clip_norm": 2.0,
+    "early_stopping_patience": 6,
+    "minimum_improvement": 0.0001,
+    "freeze_visual_encoder": true,
+    "chunk_steering_mse_weight": 1.0,
+    "chunk_longitudinal_mse_weight": 2.0,
+    "first_action_steering_mse_weight": 1.0,
+    "first_action_longitudinal_mse_weight": 3.0,
+    "steering_derivative_mse_weight": 10.0,
+    "longitudinal_derivative_mse_weight": 0.5,
+    "longitudinal_bias_loss_weight": 2.0,
+    "selection_bias_violation_weight": 0.1,
+    "selection_smoothness_violation_weight": 0.05,
+    "target_maximum_absolute_longitudinal_bias": 0.075,
+    "target_maximum_steering_smoothness_ratio": 1.25,
+    "route_command_weights": {
+      "follow_lane": 1.0,
+      "left": 1.25,
+      "right": 1.25,
+      "straight": 2.0
+    },
+    "traffic_light_weights": {
+      "none": 1.0,
+      "green": 1.5,
+      "yellow": 2.0,
+      "red": 1.0,
+      "unknown": 1.0
+    }
+  },
   "vla_offline_evaluation": {
     "expected_validation_samples": 582,
     "expected_test_samples": 582,

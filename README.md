@@ -375,3 +375,13 @@ language supervision remains a closed vocabulary generated from route and traffi
 metadata, so passing the gate does not establish open-vocabulary grounding or closed-loop
 safety. Run `make phase8-vla-latency` before `make phase8-vla-offline-gate`. See
 `docs/phase8_1_offline_promotion_gate.md`.
+
+Phase 8.2 retains the failed Phase 8.1 checkpoint as an immutable baseline and warm-starts a
+separate corrective candidate. Training freezes the visual backbone, adds axis-specific
+first-action and chunk losses, matches adjacent action derivatives, penalizes first-action
+longitudinal bias, and upweights the weak straight/yellow/green instruction conditions.
+Checkpoint selection uses validation accuracy plus explicit bias and steering-smoothness
+headroom; the test split is read only after the best checkpoint is frozen. Run
+`make phase8-vla-corrective-smoke` locally, submit the full A100 run with
+`make phase8-vla-corrective-sol-submit`, then run the unchanged latency and offline promotion
+gates. See `docs/phase8_2_corrective_finetuning.md`.

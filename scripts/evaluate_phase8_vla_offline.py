@@ -31,6 +31,7 @@ from carla_diffusion.vla_evaluation import (
     summarize_instruction_slices,
     vla_promotion_decision,
 )
+from carla_diffusion.vla_smoothing import apply_checkpoint_smoother
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,7 +132,10 @@ def main() -> int:
     checkpoint: dict[str, Any] = torch.load(
         checkpoint_path, map_location=device, weights_only=False
     )
-    if checkpoint.get("model_type") != "hierarchical_vla_preflight":
+    if checkpoint.get("model_type") not in {
+        "hierarchical_vla_preflight",
+        "hierarchical_vla_smoothed",
+    }:
         raise ValueError("candidate checkpoint has the wrong model type")
     training_report = json.loads(args.training_report.read_text(encoding="utf-8"))
     baseline_report = json.loads(args.baseline_report.read_text(encoding="utf-8"))
@@ -177,12 +181,13 @@ def main() -> int:
                 name: tensor.to(device, non_blocking=True)
                 for name, tensor in host_batch.items()
             }
-            prediction = model(
+            raw_prediction = model(
                 batch["images"],
                 batch["state_history"],
                 batch["instruction_token_ids"],
                 batch["instruction_attention_mask"],
             )
+            prediction = apply_checkpoint_smoother(raw_prediction, checkpoint)
             predicted_chunks.extend(prediction.float().cpu().tolist())
             target_chunks.extend(batch["target"].float().cpu().tolist())
     first_predictions = [chunk[0] for chunk in predicted_chunks]
@@ -236,7 +241,7 @@ def main() -> int:
     )
     report = {
         "status": "passed",
-        "model_type": "hierarchical_vla_preflight",
+        "model_type": str(checkpoint["model_type"]),
         "promotion_gate_passed": promotion["gate_passed"],
         "claim_boundary": (
             "Closed-vocabulary deterministic instructions derived from route and signal "
@@ -245,6 +250,7 @@ def main() -> int:
         "checkpoint": str(checkpoint_path),
         "checkpoint_sha256": checkpoint_sha256,
         "checkpoint_epoch": int(checkpoint["epoch"]),
+        "deployment_transform": checkpoint.get("deployment_transform"),
         "baseline_report": str(args.baseline_report.resolve()),
         "device": str(device),
         "dataset_sizes": {

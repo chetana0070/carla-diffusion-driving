@@ -18,6 +18,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from carla_diffusion.closed_loop import latency_summary
 from carla_diffusion.vla_policy import HierarchicalVLAPlanner
+from carla_diffusion.vla_smoothing import apply_checkpoint_smoother
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,7 +65,10 @@ def main() -> int:
     checkpoint: dict[str, Any] = torch.load(
         checkpoint_path, map_location=device, weights_only=False
     )
-    if checkpoint.get("model_type") != "hierarchical_vla_preflight":
+    if checkpoint.get("model_type") not in {
+        "hierarchical_vla_preflight",
+        "hierarchical_vla_smoothed",
+    }:
         raise ValueError("checkpoint is not a hierarchical VLA planner")
     config = checkpoint["config"]["vision_language_action"]
     model = build_model(checkpoint).to(device)
@@ -93,7 +97,8 @@ def main() -> int:
 
     @torch.inference_mode()
     def predict() -> torch.Tensor:
-        return model(images, states, token_ids, attention_mask)
+        raw = model(images, states, token_ids, attention_mask)
+        return apply_checkpoint_smoother(raw, checkpoint)
 
     torch.cuda.reset_peak_memory_stats()
     for _ in range(args.warmup):
@@ -119,6 +124,7 @@ def main() -> int:
         "batch_size": 1,
         "history_frames": int(config["history_frames"]),
         "action_horizon": int(config["action_horizon"]),
+        "deployment_transform": checkpoint.get("deployment_transform"),
         "latency": summary,
         "latency_budget_ms": budget,
         "p95_latency_gate_passed": summary["p95_ms"] <= budget,

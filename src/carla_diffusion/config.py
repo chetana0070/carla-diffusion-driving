@@ -40,6 +40,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "phase7_closed_loop_evaluation",
         "vision_language_action",
         "vla_corrective_finetuning",
+        "vla_steering_smoothing",
         "vla_offline_evaluation",
         "evaluation",
     }
@@ -63,6 +64,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     phase7_closed_loop = config["phase7_closed_loop_evaluation"]
     vla = config["vision_language_action"]
     vla_finetuning = config["vla_corrective_finetuning"]
+    vla_smoothing = config["vla_steering_smoothing"]
     vla_evaluation = config["vla_offline_evaluation"]
     evaluation = config["evaluation"]
 
@@ -562,6 +564,39 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
             for weight in weights.values()
         ),
         "VLA corrective condition weights are invalid",
+    )
+    _require(
+        vla_smoothing["protocol_version"] == "1.0.0"
+        and vla_smoothing["method"]
+        == "causal_exponential_steering_smoother"
+        and vla_smoothing["calibration_split"] == "validation"
+        and vla_smoothing["preserve_first_action"] is True,
+        "unsupported VLA steering smoothing contract",
+    )
+    _require(
+        isinstance(vla_smoothing["base_checkpoint_sha256"], str)
+        and len(vla_smoothing["base_checkpoint_sha256"]) == 64,
+        "VLA smoothing base checkpoint digest must be SHA-256",
+    )
+    smoothing_alphas = vla_smoothing["candidate_alphas"]
+    _require(
+        isinstance(smoothing_alphas, list)
+        and len(smoothing_alphas) >= 3
+        and len(set(smoothing_alphas)) == len(smoothing_alphas)
+        and all(0 < alpha <= 1 for alpha in smoothing_alphas)
+        and 1.0 in smoothing_alphas,
+        "VLA smoothing alpha candidates are invalid",
+    )
+    _require(
+        1
+        <= vla_smoothing["target_maximum_steering_smoothness_ratio"]
+        < vla_evaluation["maximum_chunk_smoothness_ratio"]
+        and 0
+        <= vla_smoothing[
+            "maximum_full_chunk_steering_rmse_degradation_fraction"
+        ]
+        <= 1,
+        "VLA smoothing calibration limits are invalid",
     )
     _require(
         vla_evaluation["expected_validation_samples"] > 0

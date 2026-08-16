@@ -79,6 +79,17 @@ class ConfigTests(unittest.TestCase):
             ],
             config["vla_offline_evaluation"]["maximum_chunk_smoothness_ratio"],
         )
+        self.assertEqual(
+            config["vla_steering_smoothing"]["method"],
+            "causal_exponential_steering_smoother",
+        )
+        self.assertTrue(config["vla_steering_smoothing"]["preserve_first_action"])
+        self.assertLess(
+            config["vla_steering_smoothing"][
+                "target_maximum_steering_smoothness_ratio"
+            ],
+            config["vla_offline_evaluation"]["maximum_chunk_smoothness_ratio"],
+        )
         self.assertGreaterEqual(
             config["vla_offline_evaluation"]["maximum_relative_rmse"], 1
         )

@@ -321,6 +321,16 @@
       "unknown": 1.0
     }
   },
+  "vla_steering_smoothing": {
+    "protocol_version": "1.0.0",
+    "base_checkpoint_sha256": "5a8c2d4c97b114a6fdf778ca5c0713a4f6acd08cb6572a46c6a0394fbcf6f082",
+    "method": "causal_exponential_steering_smoother",
+    "calibration_split": "validation",
+    "candidate_alphas": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.025],
+    "target_maximum_steering_smoothness_ratio": 1.25,
+    "maximum_full_chunk_steering_rmse_degradation_fraction": 0.25,
+    "preserve_first_action": true
+  },
   "vla_offline_evaluation": {
     "expected_validation_samples": 582,
     "expected_test_samples": 582,

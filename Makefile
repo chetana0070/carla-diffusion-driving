@@ -13,7 +13,9 @@
 	phase8-vla-train phase8-vla-sol-submit phase8-vla-latency \
 	phase8-vla-offline-gate phase8-vla-corrective-smoke \
 	phase8-vla-corrective-train phase8-vla-corrective-sol-submit \
-	phase8-vla-corrective-latency phase8-vla-corrective-gate
+	phase8-vla-corrective-latency phase8-vla-corrective-gate \
+	phase8-vla-smoother-calibrate phase8-vla-smoother-latency \
+	phase8-vla-smoother-gate
 
 test:
 	python -m unittest discover -s tests -v
@@ -210,3 +212,21 @@ phase8-vla-corrective-gate:
 		--training-report artifacts/checkpoints/phase8_vla_corrective_v240/report.json \
 		--latency-report artifacts/evaluations/phase8_vla_corrective_latency_v240.json \
 		--output artifacts/evaluations/phase8_vla_corrective_gate_v240.json
+
+phase8-vla-smoother-calibrate:
+	python scripts/calibrate_phase8_vla_smoother.py \
+		--base-checkpoint artifacts/checkpoints/phase8_vla_corrective_v240/best.pt \
+		--base-training-report artifacts/checkpoints/phase8_vla_corrective_v240/report.json \
+		--output-dir artifacts/checkpoints/phase8_vla_smoothed_v250
+
+phase8-vla-smoother-latency:
+	python scripts/benchmark_phase8_vla_latency.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_smoothed_v250/best.pt \
+		> artifacts/evaluations/phase8_vla_smoothed_latency_v250.json
+
+phase8-vla-smoother-gate:
+	python scripts/evaluate_phase8_vla_offline.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_smoothed_v250/best.pt \
+		--training-report artifacts/checkpoints/phase8_vla_smoothed_v250/report.json \
+		--latency-report artifacts/evaluations/phase8_vla_smoothed_latency_v250.json \
+		--output artifacts/evaluations/phase8_vla_smoothed_gate_v250.json

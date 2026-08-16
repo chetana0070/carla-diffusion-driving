@@ -385,3 +385,13 @@ headroom; the test split is read only after the best checkpoint is frozen. Run
 `make phase8-vla-corrective-smoke` locally, submit the full A100 run with
 `make phase8-vla-corrective-sol-submit`, then run the unchanged latency and offline promotion
 gates. See `docs/phase8_2_corrective_finetuning.md`.
+
+Phase 8.3 addresses the sole remaining corrective-candidate failure without retraining or
+changing the public promotion thresholds. A causal exponential smoother is calibrated on the
+validation split, preserves action zero exactly, changes only future steering values, and is
+frozen into a derived checkpoint. Calibration selects the largest eligible alpha, limiting
+unnecessary distortion while requiring internal smoothness headroom and bounded full-chunk
+steering RMSE degradation. The unchanged test gate and latency benchmark both execute the
+checkpoint-bound transformation. Run `make phase8-vla-smoother-calibrate`, then
+`make phase8-vla-smoother-latency` and `make phase8-vla-smoother-gate`. See
+`docs/phase8_3_validation_calibrated_smoothing.md`.

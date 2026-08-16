@@ -10,7 +10,8 @@
 	phase7-longitudinal-train phase7-factorized-closed-loop \
 	phase7-factorized-validate phase7-factorized-closed-loop-smoke \
 	phase8-vla-prepare phase8-vla-validate phase8-vla-model-smoke \
-	phase8-vla-train phase8-vla-sol-submit
+	phase8-vla-train phase8-vla-sol-submit phase8-vla-latency \
+	phase8-vla-offline-gate
 
 test:
 	python -m unittest discover -s tests -v
@@ -169,3 +170,15 @@ phase8-vla-train:
 
 phase8-vla-sol-submit:
 	sbatch scripts/slurm/train_phase8_vla.sbatch
+
+phase8-vla-latency:
+	python scripts/benchmark_phase8_vla_latency.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_v220/best.pt \
+		> artifacts/evaluations/phase8_vla_latency_v230.json
+
+phase8-vla-offline-gate:
+	python scripts/evaluate_phase8_vla_offline.py \
+		--checkpoint artifacts/checkpoints/phase8_vla_v220/best.pt \
+		--training-report artifacts/checkpoints/phase8_vla_v220/report.json \
+		--latency-report artifacts/evaluations/phase8_vla_latency_v230.json \
+		--output artifacts/evaluations/phase8_vla_offline_gate_v230.json

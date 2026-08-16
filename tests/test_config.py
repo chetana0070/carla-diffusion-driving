@@ -57,6 +57,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["vision_language_action"]["planner_hz"], 2)
         self.assertEqual(config["vision_language_action"]["execute_steps"], 5)
         self.assertEqual(config["vision_language_action"]["action_horizon"], 16)
+        self.assertEqual(config["vla_offline_evaluation"]["expected_test_samples"], 582)
+        self.assertGreaterEqual(
+            config["vla_offline_evaluation"]["maximum_relative_rmse"], 1
+        )
         self.assertTrue(config["simulator"]["synchronous_mode"])
 
     def test_invalid_delta_is_rejected(self) -> None:

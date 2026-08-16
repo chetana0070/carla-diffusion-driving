@@ -366,3 +366,12 @@ milestone validates language conditioning and deployment contracts but does not 
 open-vocabulary grounding. Run `make phase8-vla-prepare`,
 `make phase8-vla-validate`, and `make phase8-vla-model-smoke` before training. See
 `docs/phase8_vla_preflight.md`.
+
+Phase 8.1 evaluates the frozen SOL-trained planner before CARLA integration. The gate checks
+checkpoint provenance, complete validation/test coverage, first-action steering and
+longitudinal quality against the promoted Phase 7 factorized baseline, action-chunk
+smoothness, instruction-conditioned diagnostic slices, and batch-one planner latency. The
+language supervision remains a closed vocabulary generated from route and traffic-signal
+metadata, so passing the gate does not establish open-vocabulary grounding or closed-loop
+safety. Run `make phase8-vla-latency` before `make phase8-vla-offline-gate`. See
+`docs/phase8_1_offline_promotion_gate.md`.

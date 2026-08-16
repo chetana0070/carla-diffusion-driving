@@ -39,6 +39,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         "factorized_longitudinal_finetuning",
         "phase7_closed_loop_evaluation",
         "vision_language_action",
+        "vla_offline_evaluation",
         "evaluation",
     }
     missing = required_sections - config.keys()
@@ -60,6 +61,7 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
     factorized_finetuning = config["factorized_longitudinal_finetuning"]
     phase7_closed_loop = config["phase7_closed_loop_evaluation"]
     vla = config["vision_language_action"]
+    vla_evaluation = config["vla_offline_evaluation"]
     evaluation = config["evaluation"]
 
     _require(simulator["synchronous_mode"] is True, "synchronous_mode must be true")
@@ -498,6 +500,15 @@ def load_and_validate_config(path: str | Path) -> dict[str, Any]:
         0 <= vla["target_maximum_safety_active_fraction"] < 1
         and 0 < vla["maximum_planner_latency_ms"] <= 1000 / vla["planner_hz"],
         "VLA promotion envelope is invalid",
+    )
+    _require(
+        vla_evaluation["expected_validation_samples"] > 0
+        and vla_evaluation["expected_test_samples"] > 0
+        and vla_evaluation["maximum_relative_rmse"] >= 1
+        and vla_evaluation["maximum_absolute_longitudinal_bias"] >= 0
+        and vla_evaluation["maximum_longitudinal_behavior_drift"] >= 0
+        and vla_evaluation["maximum_chunk_smoothness_ratio"] >= 1,
+        "VLA offline promotion thresholds are invalid",
     )
 
     split_sets = [

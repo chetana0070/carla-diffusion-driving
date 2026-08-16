@@ -284,6 +284,14 @@
     "target_maximum_safety_active_fraction": 0.6,
     "maximum_planner_latency_ms": 500.0
   },
+  "vla_offline_evaluation": {
+    "expected_validation_samples": 582,
+    "expected_test_samples": 582,
+    "maximum_relative_rmse": 1.25,
+    "maximum_absolute_longitudinal_bias": 0.1,
+    "maximum_longitudinal_behavior_drift": 0.2,
+    "maximum_chunk_smoothness_ratio": 1.5
+  },
   "evaluation": {
     "seeds": [17, 29, 43],
     "target_route_completion_gain_percentage_points": 10,
